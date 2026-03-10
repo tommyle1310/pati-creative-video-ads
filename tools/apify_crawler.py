@@ -141,6 +141,7 @@ def search_ads(
     country_code: str = "US",
     limit: int = 50,
     ad_type: str = "all",
+    page_id: str = "",
 ) -> dict:
     """
     Search Meta Ad Library via Apify actor.
@@ -150,6 +151,8 @@ def search_ads(
         country_code: "US", "UK"/"GB", "AU"
         limit: Max ads to return
         ad_type: "all" or "video" (media_type filter)
+        page_id: Facebook Page ID — if provided, fetches all ads from this page
+                 (ignores keyword). Use for brands with known page IDs.
 
     Returns:
         dict with 'data' (list of normalized ad dicts)
@@ -164,7 +167,7 @@ def search_ads(
 
     # Build the Ad Library search URL
     media_type = "video" if ad_type in ("video", "video_and_dynamic") else "all"
-    search_url = _build_ad_library_url(keyword, country, media_type)
+    search_url = _build_ad_library_url(keyword, country, media_type, page_id=page_id)
 
     # Actor requires count >= 10
     actual_count = max(limit, 10)
@@ -173,8 +176,12 @@ def search_ads(
         "count": actual_count,
     }
 
-    print(f"  Apify: Searching '{keyword}' in {country} (limit={limit})...",
-          file=sys.stderr, flush=True)
+    if page_id:
+        print(f"  Apify: Fetching ads for page_id={page_id} in {country} (limit={limit})...",
+              file=sys.stderr, flush=True)
+    else:
+        print(f"  Apify: Searching '{keyword}' in {country} (limit={limit})...",
+              file=sys.stderr, flush=True)
 
     try:
         # Start the actor run

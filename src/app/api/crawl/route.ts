@@ -220,9 +220,9 @@ async function runPipeline(
       reject(err);
     });
 
-    // Safety timeout: 30 minutes for demo, 90 minutes for full
-    // (3 Apify searches × ~2min each + per-ad AI analysis)
-    const timeout = mode === 'demo' ? 1_800_000 : 5_400_000;
+    // Safety timeout: 45 minutes for demo, 90 minutes for full
+    // (up to 15 Apify searches × ~2min each + per-ad AI analysis)
+    const timeout = mode === 'demo' ? 2_700_000 : 5_400_000;
     setTimeout(() => {
       if (job.status !== 'complete' && job.status !== 'failed') {
         proc.kill();

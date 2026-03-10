@@ -175,24 +175,62 @@ def _save_incremental(records, job_id, output_dir, your_brand="FusiForce", sync_
 # Each brand has: search name (for Apify), known landing page, region hints
 
 TARGET_BRANDS = [
-    {"brand": "Omni Creatine", "search": "omni creatine", "landing_page": "https://omnicreatine.com/products/omni-creatine-gummy", "region": "US"},
-    {"brand": "Create Wellness", "search": "create wellness creatine", "landing_page": "https://trycreate.co", "region": "US"},
-    {"brand": "Legion Athletics", "search": "legion athletics creatine", "landing_page": "https://legionathletics.com/products/supplements/creatine-gummies/", "region": "US"},
-    {"brand": "Creatine Gummies", "search": "creatine gummies brand", "landing_page": "https://creatinegummies.com", "region": "US"},
-    {"brand": "Bounce Nutrition", "search": "bounce nutrition creatine", "landing_page": "https://bouncenutrition.com", "region": "US"},
-    {"brand": "Momentous", "search": "momentous creatine chews", "landing_page": "https://www.livemomentous.com/products/creatine-monohydrate-chews", "region": "US"},
-    {"brand": "Organifi", "search": "organifi creatine chews", "landing_page": "https://www.organifishop.com/products/creatine-cherry-chews", "region": "US"},
-    {"brand": "OVRLOAD", "search": "ovrload creatine", "landing_page": "https://ovrload.co/", "region": "US"},
-    {"brand": "Novomins", "search": "novomins creatine gummies", "landing_page": "https://novomins.com/products/creatine-gummies", "region": "UK"},
-    {"brand": "Animal Pak", "search": "animal pak creatine chews", "landing_page": "https://uk.animalpak.com/products/animal-creatine-chews", "region": "UK"},
-    {"brand": "Thurst", "search": "thurst creatine gummies", "landing_page": "https://www.thurst.com.au/products/creatine-gummies", "region": "AU"},
-    {"brand": "Force Factor", "search": "force factor creatine gummies", "landing_page": "https://forcefactor.com/products/creatine-gummies", "region": "US"},
-    {"brand": "NutreeBio", "search": "nutreebio creatine", "landing_page": "https://nutreebio.com/", "region": "US"},
-    {"brand": "MMUSA", "search": "mmusa creatine gummies", "landing_page": "https://mmusa.com/product/atp-muscle-fuel-creatine-gummies/", "region": "US"},
-    {"brand": "Swoly", "search": "swoly creatine gummies", "landing_page": "https://getswoly.com/products/creatine-mono-gummies", "region": "US"},
+    # page_id: Facebook Page ID for precise ad fetching. When set, Apify uses
+    # view_all_page_id instead of keyword search — guarantees only ads from that page.
+    # page_aliases: alternate page_name strings the brand may use (for fuzzy matching
+    # when falling back to keyword search).
+    {"brand": "Omni Creatine", "search": "omni creatine", "landing_page": "https://omnicreatine.com/products/omni-creatine-gummy", "region": "US", "page_id": "", "page_aliases": ["omni creatine", "omni"]},
+    {"brand": "Create Wellness", "search": "create wellness creatine", "landing_page": "https://trycreate.co", "region": "US", "page_id": "", "page_aliases": ["create", "create wellness"]},
+    {"brand": "Legion Athletics", "search": "legion athletics creatine", "landing_page": "https://legionathletics.com/products/supplements/creatine-gummies/", "region": "US", "page_id": "", "page_aliases": ["legion athletics", "legion"]},
+    {"brand": "Creatine Gummies", "search": "bear balanced creatine gummies", "landing_page": "https://creatinegummies.com", "region": "US", "page_id": "", "page_aliases": ["creatine gummies", "bear balanced"]},
+    {"brand": "Bounce Nutrition", "search": "bounce nutrition creatine", "landing_page": "https://bouncenutrition.com", "region": "US", "page_id": "", "page_aliases": ["bounce nutrition", "bounce"]},
+    {"brand": "Momentous", "search": "momentous creatine chews", "landing_page": "https://www.livemomentous.com/products/creatine-monohydrate-chews", "region": "US", "page_id": "", "page_aliases": ["momentous", "live momentous"]},
+    {"brand": "Organifi", "search": "organifi creatine chews", "landing_page": "https://www.organifishop.com/products/creatine-cherry-chews", "region": "US", "page_id": "", "page_aliases": ["organifi"]},
+    {"brand": "OVRLOAD", "search": "ovrload creatine", "landing_page": "https://ovrload.co/", "region": "US", "page_id": "", "page_aliases": ["ovrload"]},
+    {"brand": "Novomins", "search": "novomins creatine gummies", "landing_page": "https://novomins.com/products/creatine-gummies", "region": "UK", "page_id": "", "page_aliases": ["novomins"]},
+    {"brand": "Animal Pak", "search": "animal pak creatine chews", "landing_page": "https://uk.animalpak.com/products/animal-creatine-chews", "region": "UK", "page_id": "", "page_aliases": ["animal pak", "animal"]},
+    {"brand": "Thurst", "search": "thurst creatine gummies", "landing_page": "https://www.thurst.com.au/products/creatine-gummies", "region": "AU", "page_id": "", "page_aliases": ["thurst"]},
+    {"brand": "Force Factor", "search": "force factor creatine gummies", "landing_page": "https://forcefactor.com/products/creatine-gummies", "region": "US", "page_id": "", "page_aliases": ["force factor"]},
+    {"brand": "NutreeBio", "search": "nutreebio creatine", "landing_page": "https://nutreebio.com/", "region": "US", "page_id": "", "page_aliases": ["nutreebio"]},
+    {"brand": "MMUSA", "search": "mmusa creatine gummies", "landing_page": "https://mmusa.com/product/atp-muscle-fuel-creatine-gummies/", "region": "US", "page_id": "", "page_aliases": ["mmusa"]},
+    {"brand": "Swoly", "search": "swoly creatine gummies", "landing_page": "https://getswoly.com/products/creatine-mono-gummies", "region": "US", "page_id": "", "page_aliases": ["swoly"]},
 ]
 
 MIN_ADS_PER_BRAND = 5  # Must have at least 5 video ads per brand
+
+
+def _matches_brand(ad: dict, brand_def: dict) -> bool:
+    """
+    Check if an ad's page_name or link_url matches the target brand.
+    Uses brand name + page_aliases for fuzzy matching on page_name,
+    and landing_page domain check on link_url.
+    Prevents cross-brand contamination when using keyword search.
+    """
+    # Check link_url against known landing page domain (strongest signal)
+    known_landing = brand_def.get("landing_page", "")
+    if known_landing:
+        from urllib.parse import urlparse
+        known_domain = urlparse(known_landing).netloc.lower().replace("www.", "")
+        ad_link = (ad.get("link_url") or ad.get("landing_page_url") or "").lower()
+        if known_domain and known_domain in ad_link:
+            return True
+
+    page_name = (ad.get("page_name") or "").strip().lower()
+    if not page_name:
+        return True  # Can't verify — let it through (Stage 1/2/3 will filter)
+
+    # Check brand name
+    brand_lower = brand_def["brand"].lower()
+    if brand_lower in page_name or page_name in brand_lower:
+        return True
+
+    # Check aliases
+    for alias in brand_def.get("page_aliases", []):
+        alias_lower = alias.lower()
+        if alias_lower in page_name or page_name in alias_lower:
+            return True
+
+    return False
 
 
 # ── Main Pipeline ────────────────────────────────────────────────────────────
@@ -280,13 +318,22 @@ def run_pipeline(keyword, markets, mode, your_brand, job_id, output_dir):
         log(f"{'='*60}")
 
         # ── Fetch ads via Apify ──
+        brand_page_id = brand_def.get("page_id", "")
         brand_ads = []
         try:
             from apify_crawler import search_ads as apify_search
-            # Search with brand-specific term, filter active+video
-            result = apify_search(search_term, region, limit=100, ad_type="video")
-            brand_ads = result.get("data", [])
-            log(f"    Apify: {len(brand_ads)} raw ads returned")
+
+            # Prefer page_id search (guarantees only ads from this brand's page)
+            if brand_page_id:
+                log(f"    Using page_id={brand_page_id} for precise search")
+                result = apify_search(search_term, region, limit=100, ad_type="video", page_id=brand_page_id)
+                brand_ads = result.get("data", [])
+                log(f"    Apify (page_id): {len(brand_ads)} raw ads returned")
+            else:
+                # Fallback: keyword search
+                result = apify_search(search_term, region, limit=100, ad_type="video")
+                brand_ads = result.get("data", [])
+                log(f"    Apify (keyword): {len(brand_ads)} raw ads returned")
 
             # If too few, try broader search
             if len(brand_ads) < MIN_ADS_PER_BRAND:
@@ -310,6 +357,17 @@ def run_pipeline(keyword, markets, mode, your_brand, job_id, output_dir):
         # ── Filter: only keep ads with video URLs ──
         brand_ads = [a for a in brand_ads if get_video_url_from_ad(a)]
         log(f"    With video URL: {len(brand_ads)} ads")
+
+        # ── Filter: verify page_name matches target brand ──
+        # When using keyword search (no page_id), Apify returns ads from ANY
+        # advertiser matching the keyword. This rejects ads from other brands.
+        # page_id searches already guarantee the right page, but we still verify
+        # as a safety net.
+        pre_filter_count = len(brand_ads)
+        brand_ads = [a for a in brand_ads if _matches_brand(a, brand_def)]
+        rejected = pre_filter_count - len(brand_ads)
+        if rejected > 0:
+            log(f"    Brand filter: kept {len(brand_ads)}, rejected {rejected} (wrong page_name)")
 
         if len(brand_ads) < MIN_ADS_PER_BRAND:
             log(f"    WARNING: Only {len(brand_ads)} video ads (min {MIN_ADS_PER_BRAND}) — processing all available")
