@@ -8,7 +8,15 @@
     "start": "next start"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
+    "@prisma/adapter-neon": "^7.4.2",
+    "@prisma/client": "^7.4.2",
+    "bullmq": "^5.70.4",
+    "child_process": "^1.0.2",
+    "exceljs": "^4.4.0",
+    "ioredis": "^5.10.0",
     "next": "16.1.6",
+    "prisma": "^7.4.2",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },

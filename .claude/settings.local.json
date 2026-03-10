@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx prisma:*)",
+      "Bash(python cleanup.py)",
+      "Bash(echo 'TRUNCATE \"\"\"\"AdRecord\"\"\"\", \"\"\"\"CompetitorScore\"\"\"\", \"\"\"\"CrawlJob\"\"\"\" CASCADE;')",
+      "Bash(npx next:*)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

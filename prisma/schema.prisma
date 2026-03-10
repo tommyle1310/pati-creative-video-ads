@@ -1,0 +1,126 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model AdRecord {
+  id              String   @id @default(cuid())
+
+  // Identity
+  brand           String
+  foreplayUrl     String
+  landingPageUrl  String
+
+  // Analysis Fields (8 rich text fields)
+  hook            String   @db.Text
+  concept         String   @db.Text
+  scriptBreakdown String   @db.Text
+  visual          String   @db.Text
+  psychology      String   @db.Text
+  cta             String   @db.Text
+  keyTakeaways    String   @db.Text
+  productionFormula String @db.Text
+
+  // Scoring
+  adScore         Float    @default(0)
+  longevityDays   Int      @default(0)
+  hookType        String   @default("")
+  primaryAngle    String   @default("")
+  frameworkName   String   @default("")
+
+  // Crawl Metadata
+  adLibraryId     String   @unique
+  adLibraryUrl    String
+  region          String   // "US" | "UK" | "AU"
+  keyword         String
+  status          String   @default("active") // "active" | "inactive" | "partial"
+  crawledAt       DateTime @default(now())
+
+  // Video & Media
+  videoUrl        String?
+  thumbnailUrl    String?
+  durationSeconds Float?
+  videoFormat     String?  // "9:16" | "1:1" | "16:9" | "4:5" | "unknown"
+
+  // New fields
+  adStartDate      String?  // Raw ISO date from ad_delivery_start_time
+  adIterationCount Int?     // "X ads use this creative and text"
+  isActive         Boolean  @default(true)
+
+  // Monetization
+  impressionsLower String?
+  impressionsUpper String?
+  spendLower       String?
+  spendUpper       String?
+  spendCurrency    String?
+
+  pageId          String?
+  pageName        String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([region])
+  @@index([brand])
+  @@index([adScore])
+  @@index([status])
+}
+
+model CompetitorScore {
+  id              String   @id @default(cuid())
+
+  brand           String
+  region          String
+  adCountScore    Int
+  longevityScore  Int
+  omnichannelScore Int
+  marketFitScore  Int
+  compositeScore  Float
+  activeAdCount   Int
+  oldestAdDays    Int
+  platforms       String[] // Array of platform names
+  marketsServed   String[] // Array of market codes
+  pageId          String?
+
+  crawlJobId      String?
+  crawlJob        CrawlJob? @relation(fields: [crawlJobId], references: [id])
+
+  createdAt       DateTime @default(now())
+
+  @@unique([brand, region])
+  @@index([compositeScore])
+}
+
+model CrawlJob {
+  id              String   @id @default(cuid())
+
+  markets         String[] // ["US", "UK", "AU"]
+  keyword         String
+  yourBrand       String
+  mode            String   // "demo" | "full"
+
+  status          String   @default("queued")
+  // "queued" | "scoring" | "crawling" | "analysing" | "building_excel" | "complete" | "failed"
+
+  progress        Int      @default(0) // 0-100
+  adsProcessed    Int      @default(0)
+  adsTotal        Int      @default(0)
+  currentBrand    String?
+  currentRegion   String?
+  excelPath       String?
+  sheetUrl        String?
+  error           String?
+
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+
+  competitors     CompetitorScore[]
+
+  @@index([status])
+}

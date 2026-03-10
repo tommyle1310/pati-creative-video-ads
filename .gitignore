@@ -39,3 +39,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Project Antigravity
+/.tmp/
+/data/
+test_output.xlsx
+__pycache__/
+*.pyc
+venv/
+.venv/
+credentials.json
