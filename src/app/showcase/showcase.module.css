@@ -1,0 +1,821 @@
+/* Showcase Diagrams — Project Antigravity */
+/* Each section is a self-contained visual for screenshots */
+
+.page {
+  min-height: 100vh;
+  background: var(--bg-primary);
+  padding: 48px 24px;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 64px;
+}
+
+.pageTitle {
+  text-align: center;
+  font-size: 28px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #f0f0f5, #00c896);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 8px;
+}
+
+.pageSubtitle {
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 32px;
+}
+
+/* ── Each diagram section ── */
+.diagram {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  position: relative;
+}
+
+.diagramLabel {
+  position: absolute;
+  top: -12px;
+  left: 24px;
+  background: var(--accent-purple);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 4px 14px;
+  border-radius: 999px;
+}
+
+.diagramTitle {
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.diagramDesc {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 32px;
+}
+
+/* ══════════════════════════════════════════
+   1. PHILOSOPHY DIAGRAM
+   ══════════════════════════════════════════ */
+.philosophyFlow {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  justify-content: center;
+}
+
+.philosophyNode {
+  flex: 1;
+  max-width: 280px;
+  text-align: center;
+  padding: 28px 20px;
+  border-radius: var(--radius-lg);
+  position: relative;
+}
+
+.philosophyNode:nth-child(1) {
+  background: linear-gradient(135deg, rgba(0, 200, 150, 0.12), rgba(0, 200, 150, 0.04));
+  border: 1px solid rgba(0, 200, 150, 0.3);
+}
+
+.philosophyNode:nth-child(3) {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(124, 58, 237, 0.04));
+  border: 1px solid rgba(124, 58, 237, 0.3);
+}
+
+.philosophyNode:nth-child(5) {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04));
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.philosophyIconBox {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  font-size: 32px;
+}
+
+.philosophyNode:nth-child(1) .philosophyIconBox {
+  background: rgba(0, 200, 150, 0.15);
+  box-shadow: 0 0 30px rgba(0, 200, 150, 0.2);
+}
+
+.philosophyNode:nth-child(3) .philosophyIconBox {
+  background: rgba(124, 58, 237, 0.15);
+  box-shadow: 0 0 30px rgba(124, 58, 237, 0.2);
+}
+
+.philosophyNode:nth-child(5) .philosophyIconBox {
+  background: rgba(245, 158, 11, 0.15);
+  box-shadow: 0 0 30px rgba(245, 158, 11, 0.2);
+}
+
+.philosophyNodeTitle {
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.philosophyNode:nth-child(1) .philosophyNodeTitle { color: var(--accent-green); }
+.philosophyNode:nth-child(3) .philosophyNodeTitle { color: var(--accent-purple); }
+.philosophyNode:nth-child(5) .philosophyNodeTitle { color: var(--accent-amber); }
+
+.philosophyNodeRole {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+
+.philosophyTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.philosophyTag {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.philosophyArrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 60px;
+  color: var(--text-muted);
+  font-size: 28px;
+  opacity: 0.5;
+}
+
+.philosophyQuote {
+  text-align: center;
+  margin-top: 28px;
+  padding: 16px 24px;
+  background: rgba(0, 200, 150, 0.06);
+  border: 1px solid rgba(0, 200, 150, 0.15);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent-green);
+  letter-spacing: 0.3px;
+}
+
+/* ══════════════════════════════════════════
+   2. FUNNEL DIAGRAM
+   ══════════════════════════════════════════ */
+.funnelWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.funnelStep {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 14px 0;
+  position: relative;
+  width: 100%;
+}
+
+.funnelBar {
+  height: 48px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 15px;
+  color: white;
+  position: relative;
+  transition: transform 0.2s ease;
+}
+
+.funnelBar:hover {
+  transform: scaleY(1.08);
+}
+
+.funnelLabel {
+  position: absolute;
+  right: -220px;
+  width: 200px;
+  text-align: left;
+}
+
+.funnelLabelTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.funnelLabelDesc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.funnelArrowDown {
+  font-size: 20px;
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+
+/* ══════════════════════════════════════════
+   3. BRAND GROUPING BAR CHART
+   ══════════════════════════════════════════ */
+.barChart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.barRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.barLabel {
+  width: 160px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.barTrack {
+  flex: 1;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  position: relative;
+}
+
+.barFill {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  padding-left: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  transition: width 0.6s ease;
+}
+
+.barCount {
+  width: 50px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.barMarket {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+}
+
+/* ══════════════════════════════════════════
+   4. PRE-RANKING TABLE
+   ══════════════════════════════════════════ */
+.rankTable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+
+.rankTable thead th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-dim);
+  background: var(--bg-secondary);
+}
+
+.rankTable thead th:first-child {
+  border-radius: var(--radius-md) 0 0 0;
+}
+
+.rankTable thead th:last-child {
+  border-radius: 0 var(--radius-md) 0 0;
+}
+
+.rankTable tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.rankTable tbody tr:hover {
+  background: rgba(0, 200, 150, 0.04);
+}
+
+.rankTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.scoreCell {
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+}
+
+.scoreHigh { color: #00c896; }
+.scoreMid { color: #f59e0b; }
+.scoreLow { color: #6b7280; }
+
+.rankBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  color: white;
+}
+
+.patternBadge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(124, 58, 237, 0.15);
+  color: #a78bfa;
+  white-space: nowrap;
+}
+
+.metricCell {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.highlightRow {
+  background: rgba(0, 200, 150, 0.06) !important;
+}
+
+.highlightRow td:first-child {
+  border-left: 3px solid var(--accent-green);
+}
+
+/* ══════════════════════════════════════════
+   5. COST PIE CHART
+   ══════════════════════════════════════════ */
+.costLayout {
+  display: flex;
+  align-items: center;
+  gap: 48px;
+  justify-content: center;
+}
+
+.pieWrap {
+  position: relative;
+  width: 220px;
+  height: 220px;
+}
+
+.pieSvg {
+  width: 220px;
+  height: 220px;
+  transform: rotate(-90deg);
+}
+
+.pieCenter {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.pieCenterAmount {
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.pieCenterLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.costLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.costItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.costDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.costName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 180px;
+}
+
+.costValue {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-primary);
+}
+
+.costPercent {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+/* ══════════════════════════════════════════
+   6. ARCHITECTURE DIAGRAM
+   ══════════════════════════════════════════ */
+.archFlow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.archRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.archNode {
+  padding: 16px 24px;
+  border-radius: var(--radius-md);
+  text-align: center;
+  min-width: 150px;
+  position: relative;
+}
+
+.archNodeIcon {
+  font-size: 24px;
+  margin-bottom: 6px;
+}
+
+.archNodeTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.archNodeDesc {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.archConnector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+
+.archConnectorLine {
+  width: 2px;
+  height: 20px;
+  background: var(--text-muted);
+  opacity: 0.3;
+}
+
+.archConnectorArrow {
+  font-size: 14px;
+}
+
+.archBranch {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 24px;
+  position: relative;
+  padding-top: 12px;
+}
+
+.archBranch::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 25%;
+  right: 25%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.archBranchItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  padding-top: 12px;
+}
+
+.archBranchItem::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Pipeline phases row */
+.archPhases {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 800px;
+}
+
+.archPhase {
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Output nodes */
+.archOutputs {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+.archOutput {
+  padding: 14px 20px;
+  border-radius: var(--radius-md);
+  text-align: center;
+  min-width: 130px;
+}
+
+.archOutputIcon {
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+
+.archOutputTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.archOutputDesc {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* ══════════════════════════════════════════
+   7. STRATEGIC SUMMARY MOCK
+   ══════════════════════════════════════════ */
+.summaryMock {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.summaryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.summaryHeaderTitle {
+  font-size: 18px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.summaryCard {
+  padding: 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.summaryCardFull {
+  grid-column: 1 / -1;
+}
+
+.summaryCardTitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.summaryCardTitle.green { color: var(--accent-green); }
+.summaryCardTitle.purple { color: var(--accent-purple); }
+.summaryCardTitle.amber { color: var(--accent-amber); }
+.summaryCardTitle.blue { color: var(--accent-blue); }
+
+.patternRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.patternName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 160px;
+}
+
+.patternBarTrack {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.patternBarFill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.patternCount {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  min-width: 30px;
+  text-align: right;
+}
+
+.winnerRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.winnerRow:last-child {
+  border-bottom: none;
+}
+
+.winnerRank {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: white;
+  flex-shrink: 0;
+}
+
+.winnerInfo {
+  flex: 1;
+}
+
+.winnerBrand {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.winnerMeta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.winnerScore {
+  font-size: 16px;
+  font-weight: 900;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent-green);
+}
+
+.insightItem {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  align-items: flex-start;
+}
+
+.insightIcon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.insightText {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.insightHighlight {
+  color: var(--accent-green);
+  font-weight: 700;
+}
+
+/* ══════════════════════════════════════════
+   PRINT / SCREENSHOT HELPERS
+   ══════════════════════════════════════════ */
+.screenshotHint {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0.5;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+@media print {
+  .page { background: #0a0a1a !important; }
+  .diagram { break-inside: avoid; }
+}
