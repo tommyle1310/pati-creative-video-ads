@@ -186,7 +186,7 @@ export default function ShowcasePage() {
         {/* ═══════════════════════════════════════════════════════════
             3. BRAND GROUPING BAR CHART
             ═══════════════════════════════════════════════════════════ */}
-        <section className={styles.diagram}>
+        <section className={styles.diagram} id="brand-discovery">
           <span className={styles.diagramLabel}>Diagram 3</span>
           <h2 className={styles.diagramTitle}>Dynamic Brand Discovery</h2>
           <p className={styles.diagramDesc}>Brands auto-discovered from keyword search, sorted by ad count (most active first)</p>
@@ -214,7 +214,7 @@ export default function ShowcasePage() {
         {/* ═══════════════════════════════════════════════════════════
             4. PRE-RANKING TABLE
             ═══════════════════════════════════════════════════════════ */}
-        <section className={styles.diagram}>
+        <section className={styles.diagram} id="pre-ranking">
           <span className={styles.diagramLabel}>Diagram 4</span>
           <h2 className={styles.diagramTitle}>Pre-Ranking — Data-Driven Ad Scoring</h2>
           <p className={styles.diagramDesc}>
@@ -269,7 +269,7 @@ export default function ShowcasePage() {
         {/* ═══════════════════════════════════════════════════════════
             5. COST BREAKDOWN PIE CHART
             ═══════════════════════════════════════════════════════════ */}
-        <section className={styles.diagram}>
+        <section className={styles.diagram} id="cost-breakdown">
           <span className={styles.diagramLabel}>Diagram 5</span>
           <h2 className={styles.diagramTitle}>Cost Per Full Crawl</h2>
           <p className={styles.diagramDesc}>3 markets, ~75 ads fully analyzed — under $3 total</p>
@@ -319,7 +319,7 @@ export default function ShowcasePage() {
         {/* ═══════════════════════════════════════════════════════════
             6. ARCHITECTURE DIAGRAM
             ═══════════════════════════════════════════════════════════ */}
-        <section className={styles.diagram}>
+        <section className={styles.diagram} id="system-architecture">
           <span className={styles.diagramLabel}>Diagram 6</span>
           <h2 className={styles.diagramTitle}>System Architecture</h2>
           <p className={styles.diagramDesc}>Full data flow from user click to Google Sheet delivery</p>
@@ -428,7 +428,7 @@ export default function ShowcasePage() {
         {/* ═══════════════════════════════════════════════════════════
             7. STRATEGIC SUMMARY MOCK (Dashboard-style)
             ═══════════════════════════════════════════════════════════ */}
-        <section className={styles.diagram}>
+        <section className={styles.diagram} id="strategic-summary">
           <span className={styles.diagramLabel}>Diagram 7</span>
           <h2 className={styles.diagramTitle}>Strategic Summary — Dashboard View</h2>
           <p className={styles.diagramDesc}>What the creative team sees after a crawl completes</p>
