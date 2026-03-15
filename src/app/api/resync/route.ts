@@ -30,7 +30,8 @@ export async function POST() {
     const dataPath = path.join(tmpDir, 'resync-data.json');
 
     // Convert Prisma records to the format gsheet_writer expects
-    const jsonRecords = records.map((r) => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const jsonRecords = records.map((r: any) => ({
       brand: r.brand,
       foreplayUrl: r.foreplayUrl,
       landingPageUrl: r.landingPageUrl,
