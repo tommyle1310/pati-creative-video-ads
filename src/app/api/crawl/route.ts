@@ -5,7 +5,7 @@
  * Pipeline: Meta API scoring → Stage 1 (Metadata+OCR) → Stage 2 (Haiku) → Stage 3 (Sonnet) → Excel
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { spawn } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { getPrisma } from '@/lib/db/prisma';
@@ -29,39 +29,38 @@ interface CrawlJob {
 }
 
 const jobs = new Map<string, CrawlJob>();
+const processes = new Map<string, ChildProcess>();
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { markets, keyword, mode, yourBrand } = body;
+    const { markets, keyword, yourBrand } = body;
 
-    if (!markets || !keyword || !mode) {
+    if (!markets || !keyword) {
       return NextResponse.json(
-        { error: 'Missing required fields: markets, keyword, mode' },
+        { error: 'Missing required fields: markets, keyword' },
         { status: 400 },
       );
     }
 
     const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const adsPerBrand = mode === 'demo' ? 6 : 20;
+    const adsPerBrand = 5;  // Fixed: always 5 ads/brand
     const brandsPerMarket = 5;
-    const totalAds = mode === 'demo'
-      ? brandsPerMarket * adsPerBrand
-      : markets.length * brandsPerMarket * adsPerBrand;
+    const totalAds = markets.length * brandsPerMarket * adsPerBrand;
 
     const job: CrawlJob = {
       status: 'scoring',
-      progress: 5,
+      progress: 0,
       adsProcessed: 0,
       adsTotal: totalAds,
       markets,
       keyword,
-      mode,
+      mode: 'default',
       createdAt: new Date().toISOString(),
     };
     jobs.set(jobId, job);
 
-    console.log(`[Antigravity] Crawl job created: ${jobId} | Mode: ${mode} | Markets: ${markets.join(', ')}`);
+    console.log(`[Antigravity] Crawl job created: ${jobId} | Markets: ${markets.join(', ')}`);
 
     // Delta crawl: write skip IDs first, then run the pipeline
     (async () => {
@@ -71,7 +70,7 @@ export async function POST(request: NextRequest) {
         console.log(`[Antigravity] Could not write skip IDs: ${err}`);
       }
       try {
-        await runPipeline(jobId, job, keyword, markets, mode, yourBrand || 'FusiForce');
+        await runPipeline(jobId, job, keyword, markets, yourBrand || 'FusiForce');
       } catch (err) {
         console.error(`[Antigravity] Pipeline failed for ${jobId}:`, err);
         job.status = 'failed';
@@ -82,7 +81,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       jobId,
       status: 'scoring',
-      message: `Crawl started. Mode: ${mode}, Markets: ${markets.join(', ')}`,
+      message: `Crawl started. Markets: ${markets.join(', ')}`,
     });
   } catch (error) {
     console.error('Crawl API error:', error);
@@ -98,7 +97,6 @@ async function runPipeline(
   job: CrawlJob,
   keyword: string,
   markets: string[],
-  mode: string,
   yourBrand: string,
 ) {
   const toolsDir = path.join(process.cwd(), 'tools');
@@ -113,7 +111,6 @@ async function runPipeline(
     pipelineScript,
     '--keyword', keyword,
     '--markets', ...markets,
-    '--mode', mode,
     '--your-brand', yourBrand,
     '--job-id', jobId,
     '--output-dir', outputDir,
@@ -125,10 +122,35 @@ async function runPipeline(
       cwd: process.cwd(),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    processes.set(jobId, proc);
 
     let stdout = '';
     let lastPersistedCount = 0;
+    let persistInFlight = false;
+    let persistPending = false;
     const dataPath = path.join(outputDir, `${jobId}-data.json`);
+
+    // Debounced persist: ensures only one persistRecords runs at a time.
+    // If a persist is in-flight when a new one is requested, it queues ONE
+    // follow-up (which will read the latest JSON file and capture everything).
+    const debouncedPersist = () => {
+      if (persistInFlight) {
+        persistPending = true;
+        return;
+      }
+      persistInFlight = true;
+      persistRecords(dataPath, jobId)
+        .catch((err: unknown) => {
+          console.error(`[Antigravity] Incremental persist failed: ${err}`);
+        })
+        .finally(() => {
+          persistInFlight = false;
+          if (persistPending) {
+            persistPending = false;
+            debouncedPersist();
+          }
+        });
+    };
 
     // Parse stderr for progress updates and log messages
     proc.stderr.on('data', (data: Buffer) => {
@@ -161,12 +183,12 @@ async function runPipeline(
             }
           }
 
-          // Trigger incremental DB persist when pipeline saves partial results
+          // Trigger incremental DB persist when pipeline saves data
+          // Fires on both per-ad JSON saves and per-brand full saves
+          // Uses debounced persist to prevent concurrent upsert races
           if (trimmed.includes('[Incremental]') && job.adsProcessed > lastPersistedCount) {
             lastPersistedCount = job.adsProcessed;
-            persistRecords(dataPath, jobId).catch((err: unknown) => {
-              console.error(`[Antigravity] Incremental persist failed: ${err}`);
-            });
+            debouncedPersist();
           }
         }
       }
@@ -177,8 +199,46 @@ async function runPipeline(
       stdout += data.toString();
     });
 
-    proc.on('close', (code) => {
+    proc.on('close', async (code) => {
+      processes.delete(jobId);
+
+      // Wait for any in-flight persist to finish before final persist
+      const waitForInflight = () => new Promise<void>((r) => {
+        const check = () => { if (!persistInFlight) r(); else setTimeout(check, 100); };
+        check();
+      });
+
+      // If the job was already stopped by the user (DELETE handler), don't treat as failure
+      if (job.error === 'Stopped by user') {
+        // Wait for in-flight persists, then do a final persist of ALL data
+        await waitForInflight();
+        try {
+          await persistRecords(dataPath, jobId);
+          console.log(`[Antigravity] Final persist after stop completed for ${jobId}`);
+          // Update adsProcessed with actual DB count (not stale PROGRESS value)
+          const dbCheck = getPrisma();
+          if (dbCheck) {
+            const actualCount = await dbCheck.adRecord.count();
+            job.adsProcessed = actualCount;
+            console.log(`[Antigravity] Actual DB count after stop: ${actualCount}`);
+          }
+        } catch (err: unknown) {
+          console.error(`[Antigravity] Persist after stop failed: ${err}`);
+        }
+        // NOW mark as complete — dashboard polls will see the transition
+        job.status = 'complete';
+        job.progress = 100;
+        persistCrawlJob(jobId, job).catch(() => {});
+        resolve();
+        return;
+      }
+
       if (code !== 0) {
+        // Still persist whatever data was saved before failure
+        await waitForInflight();
+        try {
+          await persistRecords(dataPath, jobId);
+        } catch { /* best effort */ }
         job.status = 'failed';
         job.error = `Pipeline exited with code ${code}`;
         reject(new Error(job.error));
@@ -198,14 +258,22 @@ async function runPipeline(
 
         console.log(`[Antigravity] ${jobId} complete: ${job.adsProcessed} records`);
 
-        // Persist records + crawl job to database
-        persistRecords(result.dataPath, jobId).catch((err: unknown) => {
+        // Final persist — wait for in-flight, then persist all
+        await waitForInflight();
+        try {
+          await persistRecords(result.dataPath || dataPath, jobId);
+        } catch (err: unknown) {
           console.error(`[Antigravity] DB persistence failed for ${jobId}:`, err);
-        });
+        }
         persistCrawlJob(jobId, job).catch((err: unknown) => {
           console.error(`[Antigravity] CrawlJob persistence failed for ${jobId}:`, err);
         });
       } catch {
+        // Still try to persist from the dataPath even if stdout parsing failed
+        await waitForInflight();
+        try {
+          await persistRecords(dataPath, jobId);
+        } catch { /* best effort */ }
         job.status = 'complete';
         job.progress = 100;
         console.log(`[Antigravity] ${jobId} finished (could not parse result)`);
@@ -220,9 +288,8 @@ async function runPipeline(
       reject(err);
     });
 
-    // Safety timeout: 45 minutes for demo, 90 minutes for full
-    // (up to 15 Apify searches × ~2min each + per-ad AI analysis)
-    const timeout = mode === 'demo' ? 2_700_000 : 5_400_000;
+    // Safety timeout: 60 minutes (discovery + per-brand Apify searches + per-ad AI analysis)
+    const timeout = 3_600_000;
     setTimeout(() => {
       if (job.status !== 'complete' && job.status !== 'failed') {
         proc.kill();
@@ -305,11 +372,28 @@ export async function GET(request: NextRequest) {
       }
     } catch { /* ignore */ }
 
+    // Load latest strategic summary if available
+    let strategicSummary = null;
+    try {
+      const tmpDir = path.join(process.cwd(), '.tmp');
+      if (fs.existsSync(tmpDir)) {
+        const summaryFiles = fs.readdirSync(tmpDir)
+          .filter((f: string) => f.endsWith('-summary.json'))
+          .map((f: string) => ({ name: f, mtime: fs.statSync(path.join(tmpDir, f)).mtimeMs }))
+          .sort((a: { mtime: number }, b: { mtime: number }) => b.mtime - a.mtime);
+        if (summaryFiles.length > 0) {
+          const raw = fs.readFileSync(path.join(tmpDir, summaryFiles[0].name), 'utf-8');
+          strategicSummary = JSON.parse(raw);
+        }
+      }
+    } catch { /* ignore */ }
+
     return NextResponse.json({
       jobs: [...memoryJobs, ...dbJobs],
       sheetUrl: 'https://docs.google.com/spreadsheets/d/1UIFNVFXM67OOfUMZDJUCUv1YjGC9myTKyN6QL8qbLFo',
       totalAdsInDb,
       dbRegions,
+      strategicSummary,
     });
   }
 
@@ -335,6 +419,35 @@ export async function GET(request: NextRequest) {
     sheetUrl: job.sheetUrl,
     error: job.error,
   });
+}
+
+/**
+ * DELETE /api/crawl?jobId=xxx — Stop a running crawl job.
+ * Kills the Python process and marks the job as failed. Already-saved data is preserved.
+ */
+export async function DELETE(request: NextRequest) {
+  const jobId = request.nextUrl.searchParams.get('jobId');
+  if (!jobId) {
+    return NextResponse.json({ error: 'Missing jobId' }, { status: 400 });
+  }
+
+  const job = jobs.get(jobId);
+  const proc = processes.get(jobId);
+
+  if (job) {
+    // Set error BEFORE killing process so close handler sees it
+    job.error = 'Stopped by user';
+    // Don't set 'complete' yet — close handler will finalize after persist
+    job.status = 'stopping';
+  }
+
+  if (proc) {
+    proc.kill();
+    processes.delete(jobId);
+  }
+
+  console.log(`[Antigravity] Job ${jobId} stopping — final persist in progress`);
+  return NextResponse.json({ success: true, jobId, message: 'Crawl stopping. Saving data...' });
 }
 
 /**
@@ -463,6 +576,7 @@ async function persistRecords(dataPath: string, jobId: string) {
           hookType: rec.hookType || '',
           primaryAngle: rec.primaryAngle || '',
           frameworkName: rec.frameworkName || '',
+          creativePattern: rec.creativePattern || '',
           adLibraryId,
           adLibraryUrl: rec.adLibraryUrl || '',
           region: rec.region || 'US',
@@ -499,6 +613,7 @@ async function persistRecords(dataPath: string, jobId: string) {
           hookType: rec.hookType || '',
           primaryAngle: rec.primaryAngle || '',
           frameworkName: rec.frameworkName || '',
+          creativePattern: rec.creativePattern || '',
           status: rec.status || 'active',
           crawledAt: rec.crawledAt ? new Date(rec.crawledAt) : new Date(),
           // Update new fields too

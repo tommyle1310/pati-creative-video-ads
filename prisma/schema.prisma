@@ -33,6 +33,7 @@ model AdRecord {
   hookType        String   @default("")
   primaryAngle    String   @default("")
   frameworkName   String   @default("")
+  creativePattern String   @default("")
 
   // Crawl Metadata
   adLibraryId     String   @unique

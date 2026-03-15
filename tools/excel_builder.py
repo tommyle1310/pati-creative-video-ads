@@ -1,12 +1,13 @@
 """
 tools/excel_builder.py — Project Antigravity
-Canonical Excel builder: 4-tab openpyxl workbook matching Section 8 visual spec.
+Canonical Excel builder: 5-tab openpyxl workbook matching Section 8 visual spec.
 
 Tabs:
   1. 📋 Ad Intelligence Records (13 cols, row height 320, freeze D4)
   2. 🎬 Production Formulas (7 cols, row height 280, freeze D3)
   3. ⚡ Key Takeaways (6 cols, row height 220, freeze D3)
   4. 📖 Legend & Instructions (2 cols)
+  5. 🏆 Strategic Summary (conditional on summary data)
 
 Input:  records: list[dict] — list of AdRecord dicts
 Output: .xlsx file at output_path
@@ -115,15 +116,16 @@ def _title_row(ws, row, text, ncols, font=None, height=32):
 
 # ── MAIN BUILDER ──────────────────────────────────────────────────────────────
 
-def build_excel(records: list, output_path: str, your_brand: str = "FusiForce", your_parent: str = "Wellness Nest") -> None:
+def build_excel(records: list, output_path: str, your_brand: str = "FusiForce", your_parent: str = "Wellness Nest", summary: dict = None) -> None:
     """
-    Build the 4-tab Excel intelligence file.
+    Build the 5-tab Excel intelligence file.
 
     Args:
         records: List of AdRecord dicts (must have adScore computed)
         output_path: Path to save .xlsx file
         your_brand: Brand name for title bars
         your_parent: Parent company name for title bars
+        summary: Strategic summary dict from Sonnet (optional)
     """
     wb = Workbook()
 
@@ -149,7 +151,7 @@ def build_excel(records: list, output_path: str, your_brand: str = "FusiForce", 
         ("SCRIPT BREAKDOWN", 52), ("VISUAL — A/B/C ROLL", 52),
         ("CONSUMER PSYCHOLOGY", 52), ("CTA", 38),
         ("KEY TAKEAWAYS", 60), ("🎬 PRODUCTION FORMULA", 70),
-        ("HOOK TYPE", 28), ("PRIMARY ANGLE", 28), ("FRAMEWORK", 28),
+        ("HOOK TYPE", 28), ("PRIMARY ANGLE", 28), ("FRAMEWORK", 28), ("CREATIVE PATTERN", 24),
         ("PAGE NAME", 18), ("AD LIBRARY ID", 18), ("CRAWLED AT", 16),
     ]
 
@@ -209,14 +211,15 @@ def build_excel(records: list, output_path: str, your_brand: str = "FusiForce", 
             rec.get("hookType", ""),
             rec.get("primaryAngle", ""),
             rec.get("frameworkName", ""),
+            rec.get("creativePattern", ""),
             rec.get("pageName", ""),
             rec.get("adLibraryId", ""),
             rec.get("crawledAt", ""),
         ]
         # Link columns: AD LINK (4), LANDING PAGE (5), VIDEO URL (6)
         link_cols = {4, 5, 6}
-        # Centered short columns: #(1), BRAND(2), MARKET(3), 7-18, 27-32
-        center_cols = {1, 2, 3, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 27, 28, 29, 30, 31, 32}
+        # Centered short columns: #(1), BRAND(2), MARKET(3), 7-18, 27-30, 31-33
+        center_cols = {1, 2, 3, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 27, 28, 29, 30, 31, 32, 33}
         for col_idx, val in enumerate(vals, 1):
             cell = ws1.cell(row=r, column=col_idx, value=val)
             cell.fill = _rfill(alt)
@@ -374,9 +377,16 @@ def build_excel(records: list, output_path: str, your_brand: str = "FusiForce", 
         ("", ""),
         ("AD SCORING", ""),
         ("Ad Score (0–10)",
-         "Composite: Longevity 50% + Impressions 30% + Duration 20%. Green row ≥8. Yellow row ≥5."),
+         "Composite: Longevity 40% + Impressions 25% + Iterations 25% + Duration 10%. Data-driven — AI never scores quality."),
         ("Longevity",
-         "Days since ad_delivery_start_time. 90+ days = ROI-positive signal. Highest weight metric."),
+         "Days since ad_delivery_start_time. 90+ days = ROI-positive signal. Highest weight metric. "
+         "Caveat: VC-backed brands may run unprofitable ads for awareness — treat high longevity from funded brands with additional scrutiny."),
+        ("Impressions note",
+         "AdScore uses upper bound of Meta's impression range (Meta only provides ranges, not exact numbers). "
+         "Ads with wider ranges (e.g., 100K-2M) carry more uncertainty than narrow ranges (e.g., 900K-1.1M). "
+         "Use longevity and iteration count as tiebreakers when impression ranges are wide."),
+        ("Creative Pattern",
+         "One of: Problem-First UGC | Result-First Scroll Stop | Curiosity Gap | Social Proof Cascade | Comparison/Versus | Authority Demo. Classified by Sonnet (descriptive only)."),
         ("", ""),
         ("YOUR BRAND", ""),
         (f"{your_brand} / {your_parent}",
@@ -402,6 +412,62 @@ def build_excel(records: list, output_path: str, your_brand: str = "FusiForce", 
         ka.border = _border()
         va.border = _border()
         ws4.row_dimensions[row_i].height = 40
+
+    # ════════════════════════════════════════════════════════════
+    # CONDITIONAL FORMATTING — Green highlight for Top 5 in Tab 1
+    # ════════════════════════════════════════════════════════════
+    TOP5_FILL = PatternFill("solid", fgColor="E6F9F0")
+    top5_count = min(5, len(records_sorted))
+    for row_i in range(top5_count):
+        r = row_i + 4  # Data starts at row 4
+        for col_idx in range(1, len(COLS1) + 1):
+            cell = ws1.cell(row=r, column=col_idx)
+            cell.fill = TOP5_FILL
+
+    # ════════════════════════════════════════════════════════════
+    # TAB 5 — 📊 Strategic Summary
+    # ════════════════════════════════════════════════════════════
+    if summary and any(v != "—" for v in summary.values()):
+        ws5 = wb.create_sheet("📊 Strategic Summary")
+        ws5.sheet_view.showGridLines = False
+        ws5.column_dimensions["A"].width = 30
+        ws5.column_dimensions["B"].width = 100
+
+        _title_row(ws5, 1, f"📊 STRATEGIC SUMMARY — Data-Driven Intelligence for {your_brand}", 2,
+                   font=TITLE_FONT_XL, height=40)
+
+        summary_sections = [
+            ("DOMINANT PATTERNS", summary.get("dominantPatterns", "—")),
+            ("", ""),
+            ("TOP 5 WINNERS (by AdScore)", summary.get("top5Analysis", "—")),
+            ("", ""),
+            ("MARKET INSIGHTS", summary.get("marketInsights", "—")),
+            ("", ""),
+            ("STRATEGIC RECOMMENDATION", summary.get("strategicRecommendation", "—")),
+            ("", ""),
+            ("COMPETITOR RANKING", summary.get("competitorRanking", "—")),
+        ]
+
+        SECTION_KEYS_5 = {"DOMINANT PATTERNS", "TOP 5 WINNERS (by AdScore)", "MARKET INSIGHTS",
+                          "STRATEGIC RECOMMENDATION", "COMPETITOR RANKING"}
+        for row_i, (key, val) in enumerate(summary_sections, 2):
+            ka = ws5.cell(row=row_i, column=1, value=key)
+            va = ws5.cell(row=row_i, column=2, value=val)
+            if key in SECTION_KEYS_5:
+                ka.font = Font(name="Arial", bold=True, size=10, color="FFFFFF")
+                ka.fill = _hfill(PANEL_BG)
+                va.fill = PatternFill("solid", fgColor="F0F7FF")
+            else:
+                f = _rfill(row_i % 2 == 0)
+                ka.font = Font(name="Arial", bold=True, size=9, color="333333")
+                ka.fill = f
+                va.fill = f
+            va.font = Font(name="Arial", size=9, color="333333")
+            va.alignment = Alignment(wrap_text=True, vertical="top")
+            ka.alignment = Alignment(wrap_text=True, vertical="top")
+            ka.border = _border()
+            va.border = _border()
+            ws5.row_dimensions[row_i].height = 80 if key in SECTION_KEYS_5 else 20
 
     wb.save(output_path)
     print(f"✅ Excel saved: {output_path}")

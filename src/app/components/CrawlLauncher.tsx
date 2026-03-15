@@ -16,7 +16,6 @@ const MARKETS = [
 
 export default function CrawlLauncher({ onCrawlStarted, disabled }: Props) {
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>(["US"]);
-  const [mode, setMode] = useState<"demo" | "full">("demo");
   const [keyword, setKeyword] = useState("creatine gummies");
   const [loading, setLoading] = useState(false);
 
@@ -28,8 +27,11 @@ export default function CrawlLauncher({ onCrawlStarted, disabled }: Props) {
     );
   };
 
-  const estimatedAds = mode === "demo" ? 30 : selectedMarkets.length * 5 * 20;
-  const estimatedCost = mode === "demo" ? "~$1.10" : `~$${(estimatedAds * 0.036).toFixed(2)}`;
+  // Dynamic discovery: ~10 brands auto-discovered per market
+  const BRANDS_PER_MARKET = 10;
+  const estimatedBrands = selectedMarkets.length * BRANDS_PER_MARKET;
+  const estimatedAds = estimatedBrands * 5; // 5 ads per brand
+  const estimatedCost = `~$${(estimatedAds * 0.036).toFixed(2)}`;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -43,7 +45,6 @@ export default function CrawlLauncher({ onCrawlStarted, disabled }: Props) {
         body: JSON.stringify({
           markets: selectedMarkets,
           keyword,
-          mode,
           yourBrand: "FusiForce",
         }),
       });
@@ -92,37 +93,16 @@ export default function CrawlLauncher({ onCrawlStarted, disabled }: Props) {
         />
       </div>
 
-      {/* Mode */}
-      <div className={styles.fieldGroup}>
-        <label className={styles.label}>Mode</label>
-        <div className={styles.modeToggle}>
-          <button
-            type="button"
-            className={`${styles.modeBtn} ${mode === "demo" ? styles.modeActive : ""}`}
-            onClick={() => setMode("demo")}
-          >
-            <span className={styles.modeIcon}>⚡</span>
-            <div>
-              <strong>Demo</strong>
-              <span>30 ads · ~$1.10</span>
-            </div>
-          </button>
-          <button
-            type="button"
-            className={`${styles.modeBtn} ${mode === "full" ? styles.modeActive : ""}`}
-            onClick={() => setMode("full")}
-          >
-            <span className={styles.modeIcon}>🚀</span>
-            <div>
-              <strong>Full</strong>
-              <span>300 ads · ~$10.86</span>
-            </div>
-          </button>
-        </div>
-      </div>
-
       {/* Estimate */}
       <div className={styles.estimate}>
+        <div className={styles.estimateRow}>
+          <span>Brands</span>
+          <span className={styles.estimateValue}>~{estimatedBrands} ({selectedMarkets.join(", ")}) auto-discovered</span>
+        </div>
+        <div className={styles.estimateRow}>
+          <span>Ads per brand</span>
+          <span className={styles.estimateValue}>5</span>
+        </div>
         <div className={styles.estimateRow}>
           <span>Estimated ads</span>
           <span className={styles.estimateValue}>{estimatedAds}</span>

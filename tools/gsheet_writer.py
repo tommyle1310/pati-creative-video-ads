@@ -25,8 +25,12 @@ if sys.platform == "win32":
             pass
 
 import time as _time
+import threading
 
 import gspread
+
+# Prevent concurrent GSheet writes (pipeline calls sync from multiple points)
+_gsheet_lock = threading.Lock()
 from google.oauth2.service_account import Credentials
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -42,6 +46,7 @@ TAB1 = "Ad Intelligence Records"
 TAB2 = "Production Formulas"
 TAB3 = "Key Takeaways"
 TAB4 = "Legend & Instructions"
+TAB5 = "Strategic Summary"
 
 # Tab 1 headers (32 columns — includes all metadata + analysis + new fields)
 TAB1_HEADERS = [
@@ -53,7 +58,7 @@ TAB1_HEADERS = [
     "AD SCORE",
     "HOOK", "CONCEPT / BIG IDEA", "SCRIPT BREAKDOWN", "VISUAL — A/B/C ROLL",
     "CONSUMER PSYCHOLOGY", "CTA", "KEY TAKEAWAYS", "PRODUCTION FORMULA",
-    "HOOK TYPE", "PRIMARY ANGLE", "FRAMEWORK",
+    "HOOK TYPE", "PRIMARY ANGLE", "FRAMEWORK", "CREATIVE PATTERN",
     "PAGE NAME", "AD LIBRARY ID", "CRAWLED AT",
 ]
 
@@ -204,11 +209,13 @@ def _ensure_tabs(ss: gspread.Spreadsheet) -> dict:
     # Tab 4 (legend — static content)
     if TAB4 not in existing:
         ws = ss.add_worksheet(title=TAB4, rows=30, cols=2)
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         legend = [
             ["HOW TO USE THIS FILE", ""],
             ["Tab 1: Ad Intelligence Records", "Complete forensic analysis. All fields per ad."],
             ["Tab 2: Production Formulas", "Phase-by-phase shoot briefs. Filter by Hook Type or Angle."],
             ["Tab 3: Key Takeaways", "STEAL / KAIZEN / UPGRADE pre-parsed."],
+            ["Tab 5: Strategic Summary", "Data-driven pattern aggregation + Top 5 Winners + FusiForce recommendations."],
             ["", ""],
             ["FIELD DEFINITIONS", ""],
             ["Hook", "Hook TYPE + execution (0-5s) + WHY it stops the scroll."],
@@ -221,12 +228,25 @@ def _ensure_tabs(ss: gspread.Spreadsheet) -> dict:
             ["Production Formula", "Ready-to-shoot brief: FORMAT + 5 phases + voiceover + TEXT SUPER."],
             ["", ""],
             ["AD SCORING", ""],
-            ["Ad Score (0-10)", "Longevity 50% + Impressions 30% + Duration 20%."],
+            ["Ad Score (0-10)", "Longevity 40% + Impressions 25% + Iterations 25% + Duration 10%. Data-driven — AI never scores quality."],
+            ["Impressions note", "AdScore uses upper bound of Meta's impression range (Meta only provides ranges, not exact numbers). Ads with wider ranges (e.g., 100K-2M) carry more uncertainty than narrow ranges (e.g., 900K-1.1M). Use longevity and iteration count as tiebreakers when impression ranges are wide."],
+            ["Longevity caveat", "Longevity is strongest for bootstrapped/performance-focused brands. VC-backed brands may run unprofitable ads for awareness — treat high longevity from funded brands (e.g., Momentous, AG1) with additional scrutiny."],
+            ["Creative Pattern", "One of: Problem-First UGC | Result-First Scroll Stop | Curiosity Gap | Social Proof Cascade | Comparison/Versus | Authority Demo. Classified by Sonnet (descriptive only)."],
+            ["", ""],
+            ["Last crawled", now],
         ]
         ws.update(values=legend, range_name="A1")
         tabs[TAB4] = ws
     else:
         tabs[TAB4] = existing[TAB4]
+
+    # Tab 5 (strategic summary — dynamic content, written by write_records_to_gsheet)
+    if TAB5 in existing:
+        tabs[TAB5] = existing[TAB5]
+    else:
+        ws = ss.add_worksheet(title=TAB5, rows=30, cols=2)
+        ws.freeze(rows=1)
+        tabs[TAB5] = ws
 
     return tabs
 
@@ -236,6 +256,7 @@ def write_records_to_gsheet(
     regions: list = None,
     spreadsheet_title: str = "Antigravity Intelligence",
     share_email: str = "",
+    summary: dict = None,
 ) -> str:
     """
     Write/update records to Google Sheet. Deduplicates by adLibraryId.
@@ -249,6 +270,12 @@ def write_records_to_gsheet(
     Returns:
         URL of the spreadsheet
     """
+    with _gsheet_lock:
+        return _write_records_to_gsheet_inner(records, regions, spreadsheet_title, share_email, summary)
+
+
+def _write_records_to_gsheet_inner(records, regions, spreadsheet_title, share_email, summary):
+    """Inner implementation — called under _gsheet_lock."""
     client = _get_client()
 
     # Sort by adScore DESC
@@ -293,6 +320,7 @@ def write_records_to_gsheet(
             rec.get("hookType", ""),
             rec.get("primaryAngle", ""),
             rec.get("frameworkName", ""),
+            rec.get("creativePattern", ""),
             rec.get("pageName", ""),
             rec.get("adLibraryId", ""),
             rec.get("crawledAt", ""),
@@ -302,6 +330,8 @@ def write_records_to_gsheet(
     _retry(ws1.update, values=[TAB1_HEADERS] + all_rows, range_name="A1")
     _retry(ws1.freeze, rows=1)
     print(f"  GSheet Tab1: Wrote {len(all_rows)} records (clear + batch)", file=sys.stderr)
+
+    _time.sleep(2)  # Rate limit: 60 req/min — pause between tab operations
 
     # Use sorted_recs directly for Tabs 2 & 3 (we already have all data)
     all_sheet_recs = sorted_recs
@@ -328,6 +358,8 @@ def write_records_to_gsheet(
         _retry(ws2.update, values=[TAB2_HEADERS] + tab2_rows, range_name="A1")
         _retry(ws2.freeze, rows=1)
 
+    _time.sleep(2)  # Rate limit: 60 req/min — pause between tab operations
+
     # ── Tab 3: Key Takeaways ──
     ws3 = tabs[TAB3]
     tab3_rows = []
@@ -345,8 +377,54 @@ def write_records_to_gsheet(
         _retry(ws3.update, values=[TAB3_HEADERS] + tab3_rows, range_name="A1")
         _retry(ws3.freeze, rows=1)
 
+    _time.sleep(2)  # Rate limit: 60 req/min — pause between tab operations
+
+    # ── Update "Last crawled" in Tab 4 ──
+    try:
+        ws4 = tabs[TAB4]
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        # Find and update the "Last crawled" cell, or append it
+        all_vals = ws4.get_all_values()
+        updated = False
+        for row_idx, row in enumerate(all_vals):
+            if row and "Last crawled" in row[0]:
+                _retry(ws4.update, values=[[row[0], now]], range_name=f"A{row_idx+1}")
+                updated = True
+                break
+        if not updated:
+            next_row = len(all_vals) + 1
+            _retry(ws4.update, values=[["Last crawled", now]], range_name=f"A{next_row}")
+    except Exception:
+        pass  # Non-critical
+
+    _time.sleep(2)  # Rate limit
+
+    # ── Tab 5: Strategic Summary ──
+    if summary and any(v != "—" for v in summary.values()):
+        ws5 = tabs[TAB5]
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        tab5_rows = [
+            ["SECTION", "CONTENT"],
+            ["Last Updated", now],
+            ["Total Ads Analyzed", str(len(all_rows))],
+            ["", ""],
+            ["DOMINANT PATTERNS", summary.get("dominantPatterns", "—")],
+            ["", ""],
+            ["TOP 5 WINNERS (by AdScore)", summary.get("top5Analysis", "—")],
+            ["", ""],
+            ["MARKET INSIGHTS", summary.get("marketInsights", "—")],
+            ["", ""],
+            ["STRATEGIC RECOMMENDATION", summary.get("strategicRecommendation", "—")],
+            ["", ""],
+            ["COMPETITOR RANKING", summary.get("competitorRanking", "—")],
+        ]
+        _retry(ws5.clear)
+        _retry(ws5.update, values=tab5_rows, range_name="A1")
+        _retry(ws5.freeze, rows=1)
+        print(f"  GSheet Tab5: Strategic Summary written", file=sys.stderr)
+
     url = ss.url
-    print(f"  GSheet: Done! {len(all_rows)} records written across 3 tabs", file=sys.stderr)
+    print(f"  GSheet: Done! {len(all_rows)} records written across tabs", file=sys.stderr)
     print(f"  GSheet URL: {url}", file=sys.stderr)
     return url
 

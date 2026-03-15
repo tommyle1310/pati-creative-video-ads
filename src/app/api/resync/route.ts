@@ -47,6 +47,7 @@ export async function POST() {
       hookType: r.hookType,
       primaryAngle: r.primaryAngle,
       frameworkName: r.frameworkName,
+      creativePattern: r.creativePattern || '',
       adLibraryId: r.adLibraryId,
       adLibraryUrl: r.adLibraryUrl,
       region: r.region,

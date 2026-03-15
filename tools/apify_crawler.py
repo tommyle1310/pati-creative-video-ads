@@ -9,7 +9,6 @@ including video URLs, page names, spend data, start dates, etc.
 import os
 import sys
 import time
-import json
 import urllib.parse
 import requests
 from datetime import datetime, timezone
@@ -77,7 +76,25 @@ def _normalize_ad(raw: dict) -> dict:
     body = card.get("body", "") or snapshot.get("body", {}).get("text", "")
     title = card.get("title", "") or snapshot.get("title", "")
     caption = card.get("caption", "") or snapshot.get("caption", "")
-    link_url = card.get("link_url", "")
+    # Landing page URL — try multiple sources (Apify actor stores it inconsistently)
+    link_url = (
+        card.get("link_url", "")
+        or snapshot.get("link_url", "")
+        or raw.get("link_url", "")
+        or raw.get("landing_page_url", "")
+        or card.get("cta_link", "")
+        or snapshot.get("cta_link", "")
+        or ""
+    )
+    # Fallback: snapshot.caption often contains the domain (e.g., "burstcreatine.com")
+    if not link_url:
+        cap = snapshot.get("caption", "") or caption
+        if cap and "." in cap and " " not in cap.strip() and len(cap.strip()) < 60:
+            # Looks like a domain (e.g., "omnicreatine.com")
+            domain = cap.strip()
+            if not domain.startswith("http"):
+                domain = "https://" + domain
+            link_url = domain
 
     # Start date: Apify returns Unix timestamp (seconds) or formatted string
     start_ts = raw.get("start_date")
