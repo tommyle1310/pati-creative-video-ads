@@ -15,15 +15,19 @@ try:
 except ImportError:
     HAS_OCR = False
 
-# Keywords
+# Keywords — must match GUMMY form specifically, not just "creatine"
 TARGET_KEYWORDS = ["creatine", "gummies", "gummy", "crealyte", "gummie"]
-EXCLUDE_KEYWORDS = ["protein powder", "pre-workout", "preworkout", "whey", "bcaa"]
+GUMMY_INDICATORS = ["gummies", "gummy", "gummie", "chew", "chewable", "bear balanced",
+                     "crealyte", "creatine gumm"]
+EXCLUDE_KEYWORDS = ["protein powder", "pre-workout", "preworkout", "whey", "bcaa",
+                     "creatine powder", "creatine capsule", "creatine tablet",
+                     "creatine pill", "creatine monohydrate powder"]
 
 
 def passes_metadata_gate(ad: dict) -> bool:
     """
-    Stage 1A: Check ad text metadata for target keywords.
-    Returns True if ad text contains target keywords and not exclusion keywords.
+    Stage 1A: Check ad text metadata for creatine GUMMY keywords.
+    "creatine" alone is too broad — must also have gummy-form indicator.
     """
     text = " ".join([
         (ad.get("ad_creative_bodies") or [""])[0] if isinstance(ad.get("ad_creative_bodies"), list) else ad.get("ad_creative_bodies", ""),
@@ -31,10 +35,17 @@ def passes_metadata_gate(ad: dict) -> bool:
         (ad.get("ad_creative_link_titles") or [""])[0] if isinstance(ad.get("ad_creative_link_titles"), list) else ad.get("ad_creative_link_titles", ""),
     ]).lower()
 
-    has_target = any(kw in text for kw in TARGET_KEYWORDS)
-    has_exclude = any(kw in text for kw in EXCLUDE_KEYWORDS)
+    # Also check page_name and link_url
+    page_name = (ad.get("page_name") or "").lower()
+    link_url = (ad.get("link_url") or ad.get("landing_page_url") or "").lower()
+    all_text = f"{text} {page_name} {link_url}"
 
-    return has_target and not has_exclude
+    has_exclude = any(kw in all_text for kw in EXCLUDE_KEYWORDS)
+    if has_exclude:
+        return False
+
+    has_gummy = any(kw in all_text for kw in GUMMY_INDICATORS)
+    return has_gummy
 
 
 def ocr_first_frame(video_url: str, fallback_time: float = 2.0) -> str:

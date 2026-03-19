@@ -32,7 +32,8 @@
       "Bash(ls -la d:/jobs/pati/creative-project/.tmp/*-data.json)",
       "Bash(python -c \":*)",
       "Bash(ls d:/jobs/pati/creative-project/.tmp/*.json)",
-      "WebFetch(domain:motionapp.com)"
+      "WebFetch(domain:motionapp.com)",
+      "Bash(winget install:*)"
     ]
   }
 }

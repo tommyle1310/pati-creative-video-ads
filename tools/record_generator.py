@@ -36,6 +36,12 @@ def compute_ad_score(
 
 SYSTEM_PROMPT = """You are a forensic ad analyst working for {your_brand} ({your_parent}), a creatine gummy brand. Your job is to dissect competitor video ads across 8 analysis fields with surgical precision.
 
+You will receive KEY FRAMES from the video (screenshots at strategic timestamps) AND an audio transcript. You MUST analyze BOTH:
+- The VISUAL content (what is shown on screen — people, products, settings, text overlays, transitions, camera angles)
+- The AUDIO content (what is said — voiceover, dialogue)
+
+CRITICAL: Your analysis must describe what actually happens VISUALLY in the video. The hook is what you SEE in the first 3-5 seconds, not just what is said. If hands are holding a product, describe that. If there's a comment/reaction overlay, describe that. If there's a split-screen comparison, describe that.
+
 Every field must be a rich, detailed paragraph — NOT a bullet list. Write as if you're briefing a creative strategy team.
 
 Your brand's key differentiators:
@@ -47,7 +53,10 @@ Your brand's key differentiators:
 
 ANALYSIS_PROMPT = """Analyse this {region} market video ad from "{brand}".
 
-TRANSCRIPT:
+You have been given {frame_count} KEY FRAMES from the video at these timestamps: {frame_timestamps}
+Study each frame carefully — they show exactly what the viewer sees at each moment.
+
+AUDIO TRANSCRIPT:
 "{transcript}"
 
 AD METADATA:
@@ -57,17 +66,22 @@ AD METADATA:
 - Landing Page: {landing_page}
 - Format: {video_format}
 
+CRITICAL INSTRUCTIONS:
+1. Your "hook" analysis MUST describe what is VISUALLY happening in the first frames (0-5s). Look at the actual images: What do you see? Hands holding a product? A person talking to camera? A text overlay with a provocative question? A split-screen? A comment/reaction box? Describe the VISUAL execution, not just the audio.
+2. Your "visual" field MUST describe what you actually see in the provided frames — real descriptions of scenes, people, products, settings, text overlays, NOT generic guesses.
+3. Your "scriptBreakdown" should align visual beats (from frames) with audio beats (from transcript).
+
 Produce EXACTLY this JSON structure. Every field must be a rich paragraph (not bullets). Do not include any text outside the JSON:
 
 {{
-  "hook": "Type: [Named Hook Type] — [Exact execution, what happens 0-5s]. Why it stops the scroll: [Psychological mechanism with name]",
+  "hook": "Type: [Named Hook Type] — VISUAL: [What the viewer SEES in first 3-5 seconds based on the frames — describe the actual visual content]. AUDIO: [What they hear, if anything]. Why it stops the scroll: [Psychological mechanism with name]",
   "concept": "Big Idea: \\"[One-sentence idea]\\" [Full strategic architecture]. Secondary angles: [bulleted list]",
-  "scriptBreakdown": "Framework: [Named Framework]. Narrative arc: (1) [Beat name] ([timecode]) — [description]. (2) ... (3) ... (4) ... (5) ...",
-  "visual": "A-Roll: [presenter description, setting, camera]. B-Roll: [product shots with timecodes]. C-Roll: [text overlays/certs or 'NONE' with strategic note]",
-  "psychology": "Primary audience: [demographic]. Cognitive biases triggered: (1) [Named Bias] — [exact execution]. (2) ... [Regional market resonance note]",
-  "cta": "[Mechanism] CTA — [offer details or why no offer]. [Landing page job description]",
+  "scriptBreakdown": "Framework: [Named Framework]. Narrative arc: (1) [Beat name] ([timecode]) — VISUAL: [what is shown] + AUDIO: [what is said]. (2) ... (3) ... (4) ... (5) ...",
+  "visual": "A-Roll: [describe what you actually see in the frames — presenter appearance, setting, camera angle, lighting]. B-Roll: [product shots — describe the actual product appearance from frames]. C-Roll: [text overlays/graphics you can read in the frames, or 'NONE']",
+  "psychology": "Primary audience: [demographic]. Cognitive biases triggered: (1) [Named Bias] — [exact execution using both visual and audio elements]. (2) ... [Regional market resonance note]",
+  "cta": "[Mechanism] CTA — [what you see/hear in final frames]. [Landing page job description]",
   "keyTakeaways": "✅ STEAL: [What to replicate with {your_brand} implementation]\\n\\n✅ STEAL: [Second steal]\\n\\n🔨 KAIZEN: [Gap to exploit with {your_brand} action]\\n\\n🔨 KAIZEN: [Second kaizen]\\n\\n🚀 UPGRADE: [Where {your_brand} structurally wins]",
-  "productionFormula": "🎬 {your_brand_upper} PRODUCTION FORMULA — {brand} Format Adaptation\\nFORMAT: [format spec]\\n\\nPHASE 01 — HOOK (0–5s)\\n[Screen direction]\\n📝 \\"[Voiceover]\\"\\n🖥 TEXT SUPER: \\"[text]\\"\\n\\nPHASE 02 — AGITATE (5–25s)\\n[Direction]\\n📝 \\"[VO]\\"\\n🖥 TEXT SUPER: \\"[text]\\"\\n\\nPHASE 03 — REVEAL (25–45s)\\n[Direction]\\n📝 \\"[VO]\\"\\n🖥 TEXT SUPER: \\"[text]\\"\\n\\nPHASE 04 — TRUST (45–80s)\\n[Direction]\\n📝 \\"[VO]\\"\\n🖥 TEXT SUPER: \\"[text]\\"\\n\\nPHASE 05 — CTA (80–95s)\\n[Direction]\\n📝 \\"[VO]\\"\\n🖥 TEXT SUPERS (MANDATORY): \\"[text]\\"",
+  "productionFormula": "🎬 {your_brand_upper} PRODUCTION FORMULA — {brand} Format Adaptation\\nFORMAT: [format spec]\\n\\nPHASE 01 — HOOK (0–5s)\\n[Screen direction based on what you saw in frames]\\n📝 \\"[Voiceover]\\"\\n🖥 TEXT SUPER: \\"[text visible in frames]\\"\\n\\nPHASE 02 — AGITATE (5–25s)\\n[Direction]\\n📝 \\"[VO]\\"\\n🖥 TEXT SUPER: \\"[text]\\"\\n\\nPHASE 03 — REVEAL (25–45s)\\n[Direction]\\n📝 \\"[VO]\\"\\n🖥 TEXT SUPER: \\"[text]\\"\\n\\nPHASE 04 — TRUST (45–80s)\\n[Direction]\\n📝 \\"[VO]\\"\\n🖥 TEXT SUPER: \\"[text]\\"\\n\\nPHASE 05 — CTA (80–95s)\\n[Direction]\\n📝 \\"[VO]\\"\\n🖥 TEXT SUPERS (MANDATORY): \\"[text]\\"",
   "hookType": "[Short hook type label for filtering, e.g. Problem-Curiosity Hook]",
   "primaryAngle": "[Short positioning angle, e.g. Taste-first positioning]",
   "frameworkName": "[Short framework name, e.g. PAS Compression]",
@@ -75,8 +89,9 @@ Produce EXACTLY this JSON structure. Every field must be a rich paragraph (not b
 }}
 
 QUALITY RULES:
-- hook MUST contain a named hook TYPE + "Why it stops the scroll" section
-- scriptBreakdown MUST contain a named framework + numbered beats with timecodes
+- hook MUST describe the VISUAL execution first (what you see in frames), then audio, then psychological mechanism
+- scriptBreakdown MUST contain a named framework + numbered beats with timecodes, each beat has VISUAL + AUDIO
+- visual MUST describe real content from the provided frames — NOT generic descriptions
 - keyTakeaways MUST have ≥2 ✅ STEAL + ≥2 🔨 KAIZEN + 1 🚀 UPGRADE, all referencing {your_brand}
 - productionFormula MUST have FORMAT line + ≥5 phases, each with direction + 📝 voiceover + 🖥 TEXT SUPER
 - creativePattern MUST be EXACTLY one of these 7 values (no free text, no variations): "Problem-First UGC", "Result-First Scroll Stop", "Curiosity Gap", "Social Proof Cascade", "Comparison/Versus", "Authority Demo", "Unclassifiable"
@@ -94,6 +109,7 @@ def generate_ad_record(
     duration: float = 0,
     video_format: str = "unknown",
     frame_path: Optional[str] = None,
+    frame_paths: Optional[list[str]] = None,
 ) -> dict:
     """
     Generate full 8-field forensic analysis using Claude Sonnet.
@@ -107,7 +123,8 @@ def generate_ad_record(
         landing_page: Landing page URL
         duration: Video duration in seconds
         video_format: Aspect ratio
-        frame_path: Path to first frame image (optional)
+        frame_path: Path to first frame image (backward compat, optional)
+        frame_paths: Paths to multiple key frame images (preferred)
 
     Returns:
         Dict with 8 analysis fields
@@ -123,9 +140,27 @@ def generate_ad_record(
         # Build messages
         user_content = []
 
-        # Add first frame if available
-        if frame_path and os.path.exists(frame_path):
-            with open(frame_path, "rb") as f:
+        # Determine which frames to send
+        frames_to_send = []
+        if frame_paths:
+            frames_to_send = [p for p in frame_paths if p and os.path.exists(p)]
+        elif frame_path and os.path.exists(frame_path):
+            frames_to_send = [frame_path]
+
+        # Add frames with timestamp labels
+        frame_timestamps = []
+        for fp in frames_to_send:
+            # Extract timestamp from filename (e.g. "frame_5s.png" -> "5s")
+            fname = os.path.basename(fp)
+            ts_label = fname.replace("frame_", "").replace(".png", "")
+            frame_timestamps.append(ts_label)
+
+            # Add label before each frame so Sonnet knows the timestamp
+            user_content.append({
+                "type": "text",
+                "text": f"[Frame at {ts_label}]",
+            })
+            with open(fp, "rb") as f:
                 img_data = base64.b64encode(f.read()).decode("utf-8")
             user_content.append({
                 "type": "image",
@@ -147,6 +182,8 @@ def generate_ad_record(
                 duration=int(duration),
                 landing_page=landing_page,
                 video_format=video_format,
+                frame_count=len(frames_to_send),
+                frame_timestamps=", ".join(frame_timestamps) if frame_timestamps else "none available",
             ),
         })
 

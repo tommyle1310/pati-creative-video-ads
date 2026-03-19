@@ -4,6 +4,8 @@ import { useState, useCallback, useEffect } from "react";
 import CrawlLauncher from "../components/CrawlLauncher";
 import CrawlProgress from "../components/CrawlProgress";
 import TopWinners from "../components/TopWinners";
+import AdExplorer from "../components/AdExplorer";
+import AdAnalyzer from "../components/AdAnalyzer";
 import styles from "./dashboard.module.css";
 
 interface CrawlStatus {
@@ -276,6 +278,28 @@ export default function DashboardPage() {
             <p>Select top N ads by AdScore with brand, pattern, and market diversity constraints</p>
           </div>
           <TopWinners />
+        </section>
+
+        {/* Ad Explorer — Advanced Filtering */}
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h2>
+              <span className={styles.emoji}>🔍</span> Ad Explorer
+            </h2>
+            <p>Filter by longevity, iterations, pattern, market — sort by any metric</p>
+          </div>
+          <AdExplorer />
+        </section>
+
+        {/* Single Ad Analyzer */}
+        <section className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h2>
+              <span className={styles.emoji}>🧬</span> Analyze Single Ad
+            </h2>
+            <p>Paste a Meta Ad Library URL, video URL, or upload a video — get full forensic analysis + transcript</p>
+          </div>
+          <AdAnalyzer />
         </section>
 
         {/* Strategic Summary / Top 5 Winners */}

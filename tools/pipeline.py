@@ -252,7 +252,13 @@ MIN_BRANDS_EXPECTED = 5  # Minimum brands from discovery before using fallback
 
 # Keywords for Stage 1 metadata filter
 TARGET_KEYWORDS = ["creatine", "gummies", "gummy", "crealyte", "gummie"]
-EXCLUDE_KEYWORDS = ["protein powder", "pre-workout", "preworkout", "whey", "bcaa"]
+# "creatine" alone is too broad — matches powder, capsules, etc.
+# Require BOTH creatine + gummy-form indicator, OR a gummy-specific keyword
+GUMMY_INDICATORS = ["gummies", "gummy", "gummie", "gummie", "chew", "chewable", "bear balanced",
+                     "crealyte", "creatine gumm"]
+EXCLUDE_KEYWORDS = ["protein powder", "pre-workout", "preworkout", "whey", "bcaa",
+                     "creatine powder", "creatine capsule", "creatine tablet",
+                     "creatine pill", "creatine monohydrate powder"]
 
 
 def _matches_brand(ad: dict, brand_name: str, landing_page: str = "", page_aliases: list = None) -> bool:
@@ -286,13 +292,27 @@ def _matches_brand(ad: dict, brand_name: str, landing_page: str = "", page_alias
 
 def _passes_metadata_filter(ad: dict) -> bool:
     """
-    Lightweight keyword check on ad text. No OCR, no AI — just string matching.
-    After a keyword-targeted Apify search, this catches remaining irrelevant ads.
+    Keyword filter for creatine GUMMIES specifically.
+    "creatine" alone is too broad — also matches powder, capsules, monohydrate.
+    Must have a gummy-form indicator OR be a gummy-specific keyword.
+    Also checks page_name and landing page URL for gummy signals.
     """
     text = get_ad_text(ad).lower()
-    has_target = any(kw in text for kw in TARGET_KEYWORDS)
-    has_exclude = any(kw in text for kw in EXCLUDE_KEYWORDS)
-    return has_target and not has_exclude
+    page_name = (ad.get("page_name") or "").lower()
+    link_url = (ad.get("link_url") or ad.get("landing_page_url") or "").lower()
+    all_text = f"{text} {page_name} {link_url}"
+
+    has_exclude = any(kw in all_text for kw in EXCLUDE_KEYWORDS)
+    if has_exclude:
+        return False
+
+    # Direct gummy-specific keyword match — always passes
+    has_gummy = any(kw in all_text for kw in GUMMY_INDICATORS)
+    if has_gummy:
+        return True
+
+    # "creatine" alone is NOT enough — too many powder/capsule ads
+    return False
 
 
 def _find_fallback_brand_def(brand_name: str) -> dict:
@@ -328,13 +348,33 @@ def run_pipeline(keyword, markets, your_brand, job_id, output_dir):
 
     access_token = os.environ.get("META_ACCESS_TOKEN", "")
 
-    # Video enricher is optional (needs ffmpeg + faster-whisper)
+    # Video enricher — check available tools
     video_enricher_available = False
     try:
-        from video_enricher import enrich_video
+        from video_enricher import enrich_video, HAS_FFMPEG, HAS_OPENCV, HAS_WHISPER
         video_enricher_available = True
+
+        tools_status = []
+        if HAS_FFMPEG:
+            tools_status.append("FFmpeg ✅")
+        else:
+            tools_status.append("FFmpeg ❌")
+        if HAS_OPENCV:
+            tools_status.append("OpenCV ✅")
+        else:
+            tools_status.append("OpenCV ❌")
+        if HAS_WHISPER:
+            tools_status.append("Whisper ✅")
+        else:
+            tools_status.append("Whisper ❌")
+        log(f"  Video tools: {' | '.join(tools_status)}")
+
+        if not HAS_FFMPEG and not HAS_OPENCV:
+            log("  ⚠️ WARNING: Neither FFmpeg nor OpenCV available!")
+            log("     Video frames CANNOT be extracted. AI analysis will be text-only.")
+            log("     Install: pip install opencv-python-headless")
     except ImportError:
-        log("  Video enricher not available — will skip transcription")
+        log("  ❌ video_enricher.py not found — will skip ALL video processing")
 
     all_records = []
     processed_count = 0
@@ -589,6 +629,7 @@ def run_pipeline(keyword, markets, your_brand, job_id, output_dir):
             "durationSeconds": 0,
             "videoFormat": "unknown",
             "framePath": "",
+            "framePaths": [],
             "videoUrl": video_url,
         }
 
@@ -601,28 +642,39 @@ def run_pipeline(keyword, markets, your_brand, job_id, output_dir):
                     enrichment["videoUrl"] = video_url
                     log(f"      Extracted video from snapshot")
 
+        # Get thumbnail URL for fallback frame
+        thumbnail_url = ad.get("thumbnail_url", "") or ad.get("thumbnailUrl", "")
+
         if video_url and video_enricher_available:
             try:
-                enrichment_result = enrich_video(video_url, job_dir)
+                enrichment_result = enrich_video(video_url, job_dir, thumbnail_url=thumbnail_url)
                 enrichment.update(enrichment_result)
                 enrichment["videoUrl"] = video_url
                 duration = enrichment.get("durationSeconds", 0)
-                log(f"      Video: {duration:.0f}s, {enrichment.get('videoFormat', '?')}")
+                frame_count = len(enrichment.get("framePaths", []))
+                log(f"      Video: {duration:.0f}s, {enrichment.get('videoFormat', '?')}, {frame_count} frames")
             except Exception as e:
                 log(f"      Video enrichment failed: {e}")
 
         transcript = enrichment.get("transcript", "")
+        has_frames = len(enrichment.get("framePaths", [])) > 0
 
         # Fallback: use ad copy text if no audio transcript
+        # But ONLY skip if we have NEITHER transcript NOR frames
         if not transcript:
             ad_text = get_ad_text(ad)
             if ad_text:
-                transcript = f"[Ad copy — no audio transcript] {ad_text}"
+                transcript = f"[Ad copy text — no audio voiceover detected] {ad_text}"
                 log(f"      Using ad copy as transcript fallback")
 
-        if not transcript:
-            log(f"      No transcript available — skipping")
+        if not transcript and not has_frames:
+            log(f"      No transcript AND no frames — skipping")
             continue
+
+        # If we have frames but no transcript, provide a note
+        if not transcript and has_frames:
+            transcript = "[No audio voiceover — this is a visual-only ad. Analyze based on the video frames provided.]"
+            log(f"      No transcript but {len(enrichment.get('framePaths', []))} frames available — visual-only analysis")
 
         # ── SONNET FULL ANALYSIS (no Haiku gate — metadata filter is sufficient) ──
         log(f"      Running Sonnet analysis...")
@@ -648,8 +700,9 @@ def run_pipeline(keyword, markets, your_brand, job_id, output_dir):
                 duration=enrichment.get("durationSeconds", 0),
                 video_format=enrichment.get("videoFormat", "unknown"),
                 frame_path=enrichment.get("framePath", ""),
+                frame_paths=enrichment.get("framePaths", []),
             )
-            log(f"      Sonnet: COMPLETE")
+            log(f"      Sonnet: COMPLETE (visual analysis: {len(enrichment.get('framePaths', []))} frames)")
         except Exception as e:
             log(f"      Sonnet analysis failed: {e}")
             continue

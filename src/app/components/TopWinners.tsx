@@ -129,15 +129,15 @@ export default function TopWinners() {
           <input
             type="range"
             min={3}
-            max={20}
+            max={50}
             value={count}
             onChange={(e) => setCount(parseInt(e.target.value))}
             className={styles.slider}
           />
           <div className={styles.sliderMarks}>
             <span>3</span>
-            <span>10</span>
-            <span>20</span>
+            <span>25</span>
+            <span>50</span>
           </div>
         </div>
         <button

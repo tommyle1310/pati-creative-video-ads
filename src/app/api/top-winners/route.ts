@@ -1,6 +1,6 @@
 /**
  * GET /api/top-winners — Select top N ads with diversity constraints
- * Query params: n (number of ads, default 5, max 20)
+ * Query params: n (number of ads, default 5, max 50)
  *
  * Selection algorithm (from winning-video-ads.md Part 6):
  * 1. Hard exclusions (too new, no analysis)
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = request.nextUrl;
-  const n = Math.min(Math.max(parseInt(searchParams.get("n") || "5", 10), 1), 20);
+  const n = Math.min(Math.max(parseInt(searchParams.get("n") || "5", 10), 1), 50);
 
   try {
     // Fetch all ads sorted by adScore DESC
@@ -82,24 +82,29 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Step 1: Hard exclusions
-    const eligible = allAds.filter((ad) => {
-      // Exclude if no analysis
+    // Step 1: Hard exclusions (relaxed for large N to avoid running out of candidates)
+    const strictEligible = allAds.filter((ad) => {
       if (!ad.hook && !ad.concept) return false;
-      // Exclude if too new
       if (ad.longevityDays < 14) return false;
-      // Exclude if single test not yet validated
       if ((ad.adIterationCount ?? 1) === 1 && ad.longevityDays < 30) return false;
       return true;
     });
+
+    // If strict filtering leaves fewer than N candidates, relax to just "has analysis"
+    const eligible = strictEligible.length >= n
+      ? strictEligible
+      : allAds.filter((ad) => !!(ad.hook || ad.concept));
 
     const selected: SelectedAd[] = [];
     const usedIds = new Set<string>();
     const brandCount = new Map<string, number>();
 
+    // Brand cap scales with N: 2 for small selections, more for larger ones
+    const maxPerBrand = n <= 10 ? 2 : n <= 20 ? 3 : Math.ceil(n / 8);
+
     function canSelect(ad: AdRow): boolean {
       if (usedIds.has(ad.adLibraryId)) return false;
-      if ((brandCount.get(ad.brand) ?? 0) >= 2) return false;
+      if ((brandCount.get(ad.brand) ?? 0) >= maxPerBrand) return false;
       return true;
     }
 
@@ -225,6 +230,8 @@ export async function GET(request: NextRequest) {
         marketsRepresented: finalMarkets,
         patternsRepresented: finalPatterns,
         exclusionsApplied: allAds.length - eligible.length,
+        strictEligible: strictEligible.length,
+        maxPerBrand,
       },
     });
   } catch (err) {
