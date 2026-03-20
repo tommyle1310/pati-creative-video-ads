@@ -213,8 +213,68 @@ TARGET_KEYWORDS = ["creatine", "gummies", "gummy", "crealyte", "gummie"]
 EXCLUDE_KEYWORDS = ["protein powder", "pre-workout", "preworkout", "whey", "bcaa"]
 ```
 
+## Video Ad Studio
+
+### Architecture
+The Studio (`/studio`) is a 7-step wizard that clones and improves competitor video ads using Gemini + Vidtory APIs.
+
+Pipeline: Source → Analyze (Gemini 2.5-pro) → Product Setup → Script (Gemini 2.5-flash) → Storyboard (Gemini 2.5-pro) → Generate Assets (Vidtory image/video + Gemini TTS) → Preview
+
+### StoryboardScene
+```typescript
+interface StoryboardScene {
+  id: string;
+  voiceoverScript: string;
+  voiceoverGuide: string;
+  imagePrompt: string;
+  videoPrompt: string;
+  images: string[];
+  selectedImageForVideo?: string;
+  videos: VideoData[];
+  audioUrl?: string;
+  // UI state flags for generation progress
+  isGeneratingImage: boolean;
+  isGeneratingVideo: boolean;
+  isGeneratingAudio: boolean;
+}
+```
+
+### VideoAnalysis
+```typescript
+interface VideoAnalysis {
+  musicAndPacing: string;
+  sceneBreakdown: SceneBreakdown[];  // scene_id, type, time, visual, speech
+}
+```
+
+### Environment Variables (Studio)
+```
+GEMINI_API_KEY    — Google Gemini API key (analysis, script, storyboard, TTS, prompt enhancement)
+VIDTORY_API_KEY   — Vidtory API key (image generation, video generation, media upload)
+```
+
+### Studio Behavioral Rules
+1. All external API calls go through Next.js API routes (keys stay server-side in .env).
+2. Vidtory generation is async: submit job → poll `/api/studio/job-status` (5s for images, 10s for videos).
+3. Retry logic: 3 attempts with exponential backoff for "Job ID is missing" errors.
+4. Frame extraction: client-side HTML5 video + canvas, 2 FPS, max 60 frames, JPEG quality 0.6.
+5. Product/creator images uploaded to Vidtory once, cached URLs reused across scenes.
+6. Concurrency limit: max 3 parallel image/audio generation jobs.
+7. Video prompt always appends "No Music Background" to avoid AI-generated background music.
+
+### API Routes
+9 routes under `/api/studio/`: analyze, script, storyboard, upload, generate-image, generate-video, job-status, tts, enhance-prompt.
+
+### Key Files
+- `src/lib/studio/types.ts` — TypeScript interfaces
+- `src/lib/studio/gemini.ts` — Gemini service functions
+- `src/lib/studio/vidtory.ts` — Vidtory service functions
+- `src/app/studio/page.tsx` — 7-step wizard UI
+- `INTEGRATION_GUIDE.md` — Full API reference & system instructions
+
 ## Reference Documents
 - `SKILL.md` — Full system blueprint (architecture, specs, pipeline flow)
 - `BLAST.md` — Protocol + operating principles
 - `winning-video-ads.md` — Expert framework for winner identification (7-Signal Scorecard, creative patterns, EDGE brief)
+- `INTEGRATION_GUIDE.md` — PATI Studio video ad generation pipeline reference
 - `task.md` — Project objective and north star

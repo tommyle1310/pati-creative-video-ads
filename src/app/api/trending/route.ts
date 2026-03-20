@@ -1,7 +1,8 @@
 /**
  * GET /api/trending — Trending ads leaderboard
- * Computes trending score at query time from data signals.
- * Query params: limit, market, minLongevity, hookType, period
+ * "Trending" = rising fast recently, NOT all-time best.
+ * Rewards velocity (impressions/day, iterations/day) and recency.
+ * Query params: limit, market, minLongevity, hookType, period, maxAge
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getPrisma } from "@/lib/db/prisma";
@@ -14,36 +15,43 @@ function computeTrendingScore(
     adScore: number;
     adStartDate: string | null;
   },
-  maxLongevity: number,
-  maxImpressionsMid: number,
-  maxIterations: number
+  maxImpressionsPerDay: number,
+  maxIterationsPerDay: number
 ): number {
-  // Longevity signal (35%)
-  const longevityNorm = maxLongevity > 0 ? ad.longevityDays / maxLongevity : 0;
+  const days = Math.max(ad.longevityDays, 1);
 
-  // Impressions signal (20%)
-  const impressionsMid = ad.impressionsUpper ? parseInt(ad.impressionsUpper) * 0.75 : 250000;
-  const impressionsNorm = maxImpressionsMid > 0 ? impressionsMid / maxImpressionsMid : 0;
-
-  // Iteration signal (20%)
-  const iterations = ad.adIterationCount || 1;
-  const iterationsNorm = maxIterations > 0 ? iterations / maxIterations : 0;
-
-  // Recency signal (15%) — linear decay over 180 days
-  let recencyBoost = 0.5; // default if no start date
+  // Recency (35%) — how recently the ad started. Linear decay over 365 days.
+  // A 2-week-old ad gets ~0.96, a 6-month-old gets ~0.5, a 1-year-old gets ~0.
+  let recency = 0.3; // default if no start date
   if (ad.adStartDate) {
     const daysSinceStart = Math.max(0, (Date.now() - new Date(ad.adStartDate).getTime()) / 86400000);
-    recencyBoost = Math.max(0, 1 - daysSinceStart / 180);
+    recency = Math.max(0, 1 - daysSinceStart / 365);
   }
 
-  // AdScore signal (10%)
+  // Impression velocity (25%) — impressions per day, not raw total.
+  // A 30-day ad with 1M impressions beats a 700-day ad with 1M impressions.
+  const impressionsMid = ad.impressionsUpper ? parseInt(ad.impressionsUpper) * 0.75 : 250000;
+  const impressionsPerDay = impressionsMid / days;
+  const impVelocityNorm = maxImpressionsPerDay > 0 ? impressionsPerDay / maxImpressionsPerDay : 0;
+
+  // Iteration velocity (20%) — iterations per day. Scaling signal.
+  // Brand duplicating the creative fast = confirmed winner being scaled.
+  const iterations = ad.adIterationCount || 1;
+  const iterationsPerDay = iterations / days;
+  const iterVelocityNorm = maxIterationsPerDay > 0 ? iterationsPerDay / maxIterationsPerDay : 0;
+
+  // Longevity floor (10%) — still alive after some time = not a flop.
+  // Caps at 90 days — beyond that, no extra credit for trending.
+  const longevityNorm = Math.min(ad.longevityDays / 90, 1);
+
+  // AdScore (10%) — the base data-driven quality score.
   const adScoreNorm = ad.adScore / 10;
 
   const score =
-    Math.min(longevityNorm, 1) * 0.35 +
-    Math.min(impressionsNorm, 1) * 0.20 +
-    Math.min(iterationsNorm, 1) * 0.20 +
-    recencyBoost * 0.15 +
+    recency * 0.35 +
+    Math.min(impVelocityNorm, 1) * 0.25 +
+    Math.min(iterVelocityNorm, 1) * 0.20 +
+    longevityNorm * 0.10 +
     adScoreNorm * 0.10;
 
   return Math.round(score * 100) / 10; // 0-10 scale, 1 decimal
@@ -59,12 +67,14 @@ export async function GET(request: NextRequest) {
   const minLongevity = parseInt(sp.get("minLongevity") || "14", 10);
   const hookType = sp.get("hookType") || "";
   const period = sp.get("period") || "all";
+  // Max age: exclude ancient ads from trending (default 365 days)
+  const maxAge = parseInt(sp.get("maxAge") || "365", 10);
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {
       status: "active",
-      longevityDays: { gte: minLongevity },
+      longevityDays: { gte: minLongevity, lte: maxAge },
       videoUrl: { not: null },
     };
 
@@ -90,22 +100,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ads: [], hookTypes: [] });
     }
 
-    // Compute normalization factors
-    const maxLongevity = Math.max(...ads.map((a: { longevityDays: number }) => a.longevityDays));
-    const maxImpressionsMid = Math.max(
-      ...ads.map((a: { impressionsUpper: string | null }) =>
-        a.impressionsUpper ? parseInt(a.impressionsUpper) * 0.75 : 250000
-      )
+    // Compute velocity normalization factors (per-day, not raw totals)
+    const maxImpressionsPerDay = Math.max(
+      ...ads.map((a: { impressionsUpper: string | null; longevityDays: number }) => {
+        const mid = a.impressionsUpper ? parseInt(a.impressionsUpper) * 0.75 : 250000;
+        return mid / Math.max(a.longevityDays, 1);
+      })
     );
-    const maxIterations = Math.max(
-      ...ads.map((a: { adIterationCount: number | null }) => a.adIterationCount || 1)
+    const maxIterationsPerDay = Math.max(
+      ...ads.map((a: { adIterationCount: number | null; longevityDays: number }) =>
+        (a.adIterationCount || 1) / Math.max(a.longevityDays, 1)
+      )
     );
 
     // Score and sort
     const scored = ads
       .map((ad: { longevityDays: number; impressionsUpper: string | null; adIterationCount: number | null; adScore: number; adStartDate: string | null }) => ({
         ...ad,
-        trendingScore: computeTrendingScore(ad, maxLongevity, maxImpressionsMid, maxIterations),
+        trendingScore: computeTrendingScore(ad, maxImpressionsPerDay, maxIterationsPerDay),
       }))
       .sort((a: { trendingScore: number }, b: { trendingScore: number }) => b.trendingScore - a.trendingScore)
       .slice(0, limit);

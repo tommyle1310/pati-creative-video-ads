@@ -328,7 +328,65 @@ When crawling again after a previous run:
 - Batch API calls + sleep(2) between tabs
 - Threading lock to prevent concurrent sync conflicts
 
-## 12. PLANNED UPGRADES
+### Video Ad Studio ✅
+- `/studio` page: 7-step wizard to clone & improve competitor video ads
+- Pipeline: Analyze video → Generate script → Storyboard → Images → Video clips → TTS audio
+- APIs: Gemini 2.5-pro (analysis, storyboard), Gemini 2.5-flash (script, TTS, prompt enhancement), Vidtory (image & video generation)
+- 9 API routes under `/api/studio/*` (analyze, script, storyboard, upload, generate-image, generate-video, job-status, tts, enhance-prompt)
+- Source: pick from crawled DB ads or upload new video
+- Client-side frame extraction (HTML5 video + canvas, 2 FPS, max 60 frames)
+- Async Vidtory job polling (5s for images, 10s for videos) with retry logic
+- Per-scene asset generation with concurrency limits
+- AI prompt enhancement per scene (image or video)
+- See `INTEGRATION_GUIDE.md` for full API reference
+
+---
+
+## 12. VIDEO AD STUDIO — ARCHITECTURE
+
+### Pipeline Flow (Clone & Improve)
+```
+Step 1: SOURCE SELECTION — Pick crawled ad from DB or upload video
+Step 2: FRAME EXTRACTION & ANALYSIS — Extract keyframes → Gemini 2.5-pro scene breakdown
+Step 3: PRODUCT SETUP — Upload product/creator images, define big idea & audience
+Step 4: SCRIPT GENERATION — Gemini 2.5-flash clones original structure for new product
+Step 5: STORYBOARD — Gemini 2.5-pro generates imagePrompt + videoPrompt per scene
+Step 6: ASSET GENERATION — Vidtory: images → select best → videos; Gemini TTS: audio
+Step 7: PREVIEW — Review all scene clips/audio, download for final assembly
+```
+
+### API Routes
+| Route | Method | Service | Purpose |
+|-------|--------|---------|---------|
+| `/api/studio/analyze` | POST | Gemini 2.5-pro | Analyze video keyframes → scene breakdown |
+| `/api/studio/script` | POST | Gemini 2.5-flash | Generate cloned script matching original structure |
+| `/api/studio/storyboard` | POST | Gemini 2.5-pro | Generate image + video prompts per scene |
+| `/api/studio/upload` | POST | Vidtory | Upload base64 image → hosted URL |
+| `/api/studio/generate-image` | POST | Vidtory | Submit image generation job → returns jobId |
+| `/api/studio/generate-video` | POST | Vidtory | Submit video generation job → returns jobId |
+| `/api/studio/job-status` | GET | Vidtory | Poll job status (PENDING/PROCESSING/COMPLETED/FAILED) |
+| `/api/studio/tts` | POST | Gemini TTS | Generate voiceover audio → base64 wav |
+| `/api/studio/enhance-prompt` | POST | Gemini 2.5-flash | AI-enhance a scene's image or video prompt |
+
+### Environment Variables
+```
+GEMINI_API_KEY=...    # Google Gemini API key
+VIDTORY_API_KEY=...   # Vidtory (bapi.vidtory.net) API key
+```
+
+### Key Files
+```
+src/lib/studio/types.ts     — TypeScript interfaces (StoryboardScene, VideoAnalysis, etc.)
+src/lib/studio/gemini.ts    — Gemini service (analysis, script, storyboard, TTS, enhance)
+src/lib/studio/vidtory.ts   — Vidtory service (upload, image gen, video gen, job polling)
+src/app/studio/page.tsx     — 7-step wizard UI
+src/app/api/studio/*/       — 9 API routes
+INTEGRATION_GUIDE.md        — Full API reference & system instructions
+```
+
+---
+
+## 13. PLANNED UPGRADES
 
 ### Continue Crawling
 - Crawl additional markets/keywords to build larger dataset
@@ -337,3 +395,9 @@ When crawling again after a previous run:
 ### Enhanced Top Winners
 - Sonnet-powered curation call for N > 10 (strategic narrative per ad)
 - Export Top N selection to dedicated Google Sheet tab
+
+### Studio V2
+- Final video concatenation (ffmpeg WASM or server-side)
+- StudioProject persistence in DB (save/resume projects)
+- Pipeline A: UGC from scratch (no source video needed)
+- Style image support for Vidtory generation

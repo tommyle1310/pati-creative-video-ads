@@ -111,5 +111,9 @@ When a Tool fails or an error occurs:
 ├── architecture/          # Layer 1: SOPs (The "How-To")
 ├── tools/                 # Layer 3: Python Scripts (The "Engines")
 ├── src/                   # Next.js dashboard + API routes
+│   ├── app/studio/        # Video Ad Studio (clone & improve pipeline)
+│   ├── app/api/studio/    # 9 Studio API routes (Gemini + Vidtory)
+│   └── lib/studio/        # Studio services (gemini.ts, vidtory.ts, types.ts)
+├── INTEGRATION_GUIDE.md   # PATI Studio pipeline API reference
 └── .tmp/                  # Temporary Workbench (Intermediates)
 ```

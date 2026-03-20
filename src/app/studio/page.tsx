@@ -1,0 +1,1607 @@
+"use client";
+
+import { useReducer, useCallback, useRef, useEffect, useState } from "react";
+import type {
+  VideoAnalysis,
+  StoryboardScene,
+  JobStatusResponse,
+  ScriptScene,
+} from "@/lib/studio/types";
+import { createDefaultScene } from "@/lib/studio/types";
+import {
+  Clapperboard,
+  Upload,
+  Database,
+  Play,
+  Sparkles,
+  Image as ImageIcon,
+  Video,
+  Volume2,
+  ChevronRight,
+  ChevronLeft,
+  Loader2,
+  Check,
+  X,
+  Wand2,
+  Download,
+  Trash2,
+} from "lucide-react";
+
+// ── State ────────────────────────────────────────────────────
+
+interface StudioState {
+  step: number;
+  // Step 1
+  sourceType: "db" | "upload" | null;
+  selectedAdId: string | null;
+  selectedAdVideoUrl: string | null;
+  selectedAdBrand: string | null;
+  uploadedVideoUrl: string | null;
+  uploadedVideoFile: File | null;
+  // Step 2
+  frames: string[];
+  analysis: VideoAnalysis | null;
+  isAnalyzing: boolean;
+  analyzeError: string | null;
+  // Step 3
+  productImage: string | null;
+  creatorImage: string | null;
+  bigIdea: string;
+  productInfo: string;
+  targetAudience: string;
+  // Step 4
+  scriptScenes: ScriptScene[];
+  isGeneratingScript: boolean;
+  // Step 5
+  scenes: StoryboardScene[];
+  isGeneratingStoryboard: boolean;
+  // Step 6
+  aspectRatio: "9:16" | "16:9" | "1:1";
+  voice: string;
+  // uploaded vidtory URLs (cached so we don't re-upload)
+  productVidtoryUrl: string | null;
+  creatorVidtoryUrl: string | null;
+}
+
+type Action =
+  | { type: "SET_STEP"; step: number }
+  | { type: "SET_SOURCE_DB"; adId: string; videoUrl: string; brand: string }
+  | { type: "SET_SOURCE_UPLOAD"; url: string; file: File | null }
+  | { type: "SET_FRAMES"; frames: string[] }
+  | { type: "SET_ANALYSIS"; analysis: VideoAnalysis }
+  | { type: "SET_ANALYZING"; v: boolean }
+  | { type: "SET_ANALYZE_ERROR"; error: string | null }
+  | { type: "SET_PRODUCT_IMAGE"; data: string }
+  | { type: "SET_CREATOR_IMAGE"; data: string }
+  | { type: "SET_FIELD"; field: keyof StudioState; value: unknown }
+  | { type: "SET_SCRIPT_SCENES"; scriptScenes: ScriptScene[] }
+  | { type: "UPDATE_SCRIPT_SCENE"; index: number; patch: Partial<ScriptScene> }
+  | { type: "SET_GENERATING_SCRIPT"; v: boolean }
+  | { type: "SET_SCENES"; scenes: StoryboardScene[] }
+  | { type: "SET_GENERATING_STORYBOARD"; v: boolean }
+  | { type: "UPDATE_SCENE"; id: string; patch: Partial<StoryboardScene> }
+  | { type: "SET_VIDTORY_URLS"; product?: string; creator?: string };
+
+const initialState: StudioState = {
+  step: 1,
+  sourceType: null,
+  selectedAdId: null,
+  selectedAdVideoUrl: null,
+  selectedAdBrand: null,
+  uploadedVideoUrl: null,
+  uploadedVideoFile: null,
+  frames: [],
+  analysis: null,
+  isAnalyzing: false,
+  analyzeError: null,
+  productImage: null,
+  creatorImage: null,
+  bigIdea: "",
+  productInfo: "",
+  targetAudience: "",
+  scriptScenes: [],
+  isGeneratingScript: false,
+  scenes: [],
+  isGeneratingStoryboard: false,
+  aspectRatio: "9:16",
+  voice: "Kore",
+  productVidtoryUrl: null,
+  creatorVidtoryUrl: null,
+};
+
+function reducer(state: StudioState, action: Action): StudioState {
+  switch (action.type) {
+    case "SET_STEP":
+      return { ...state, step: action.step };
+    case "SET_SOURCE_DB":
+      return {
+        ...state,
+        sourceType: "db",
+        selectedAdId: action.adId,
+        selectedAdVideoUrl: action.videoUrl,
+        selectedAdBrand: action.brand,
+        uploadedVideoUrl: null,
+      };
+    case "SET_SOURCE_UPLOAD":
+      return {
+        ...state,
+        sourceType: "upload",
+        uploadedVideoUrl: action.url,
+        uploadedVideoFile: action.file,
+        selectedAdId: null,
+        selectedAdVideoUrl: null,
+        selectedAdBrand: null,
+      };
+    case "SET_FRAMES":
+      return { ...state, frames: action.frames };
+    case "SET_ANALYSIS":
+      return { ...state, analysis: action.analysis, analyzeError: null };
+    case "SET_ANALYZING":
+      return { ...state, isAnalyzing: action.v };
+    case "SET_ANALYZE_ERROR":
+      return { ...state, analyzeError: action.error, isAnalyzing: false };
+    case "SET_PRODUCT_IMAGE":
+      return { ...state, productImage: action.data, productVidtoryUrl: null };
+    case "SET_CREATOR_IMAGE":
+      return { ...state, creatorImage: action.data, creatorVidtoryUrl: null };
+    case "SET_FIELD":
+      return { ...state, [action.field]: action.value };
+    case "SET_SCRIPT_SCENES":
+      return { ...state, scriptScenes: action.scriptScenes };
+    case "UPDATE_SCRIPT_SCENE":
+      return {
+        ...state,
+        scriptScenes: state.scriptScenes.map((sc, i) =>
+          i === action.index ? { ...sc, ...action.patch } : sc
+        ),
+      };
+    case "SET_GENERATING_SCRIPT":
+      return { ...state, isGeneratingScript: action.v };
+    case "SET_SCENES":
+      return { ...state, scenes: action.scenes };
+    case "SET_GENERATING_STORYBOARD":
+      return { ...state, isGeneratingStoryboard: action.v };
+    case "UPDATE_SCENE":
+      return {
+        ...state,
+        scenes: state.scenes.map((s) =>
+          s.id === action.id ? { ...s, ...action.patch } : s
+        ),
+      };
+    case "SET_VIDTORY_URLS":
+      return {
+        ...state,
+        productVidtoryUrl: action.product ?? state.productVidtoryUrl,
+        creatorVidtoryUrl: action.creator ?? state.creatorVidtoryUrl,
+      };
+    default:
+      return state;
+  }
+}
+
+// ── Steps config ─────────────────────────────────────────────
+
+const STEPS = [
+  { label: "Source", icon: Database },
+  { label: "Analyze", icon: Sparkles },
+  { label: "Product", icon: Upload },
+  { label: "Script", icon: Clapperboard },
+  { label: "Storyboard", icon: ImageIcon },
+  { label: "Generate", icon: Video },
+  { label: "Preview", icon: Play },
+];
+
+const VOICES = ["Kore", "Puck", "Charon", "Fenrir", "Zephyr"];
+
+// ── Helpers ──────────────────────────────────────────────────
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function pollJob(
+  jobId: string,
+  intervalMs: number,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<string> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (signal?.aborted) throw new Error("Cancelled");
+    const res = await fetch(`/api/studio/job-status?jobId=${jobId}`);
+    const data: JobStatusResponse = await res.json();
+    if (data.status === "COMPLETED" && data.url) return data.url;
+    if (data.status === "FAILED")
+      throw new Error(data.error || "Job failed");
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error("Timed out");
+}
+
+// ── Component ────────────────────────────────────────────────
+
+export default function StudioPage() {
+  const [s, dispatch] = useReducer(reducer, initialState);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const canNext = (): boolean => {
+    switch (s.step) {
+      case 1:
+        return !!(s.selectedAdVideoUrl || s.uploadedVideoUrl);
+      case 2:
+        return !!s.analysis;
+      case 3:
+        return !!s.productImage && !!s.bigIdea;
+      case 4:
+        return s.scriptScenes.length > 0;
+      case 5:
+        return s.scenes.length > 0;
+      case 6:
+        return s.scenes.some(
+          (sc) => sc.images.length > 0 || sc.videos.length > 0
+        );
+      default:
+        return false;
+    }
+  };
+
+  // ── Step 1: Source ──
+
+  const [dbAds, setDbAds] = useState<
+    { id: string; brand: string; region: string; adScore: number; videoUrl: string | null; hookType: string }[]
+  >([]);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    fetch("/api/ads?limit=100&sort=adScore")
+      .then((r) => r.json())
+      .then((data) => {
+        const ads = (data.ads || data || []).filter(
+          (a: { videoUrl?: string }) => a.videoUrl
+        );
+        setDbAds(ads);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleUploadVideo = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      dispatch({ type: "SET_SOURCE_UPLOAD", url, file });
+    },
+    []
+  );
+
+  // ── Step 2: Extract frames & analyze ──
+
+  const extractFrames = useCallback(async () => {
+    dispatch({ type: "SET_ANALYZING", v: true });
+    dispatch({ type: "SET_ANALYZE_ERROR", error: null });
+
+    try {
+      // Step 1: Extract frames server-side via FFmpeg
+      let extractRes: Response;
+
+      if (s.sourceType === "upload" && s.uploadedVideoFile) {
+        // Upload the file via FormData
+        const formData = new FormData();
+        formData.append("video", s.uploadedVideoFile);
+        extractRes = await fetch("/api/studio/extract-frames", {
+          method: "POST",
+          body: formData,
+        });
+      } else if (s.sourceType === "db" && s.selectedAdVideoUrl) {
+        // Send the video URL for server-side download
+        extractRes = await fetch("/api/studio/extract-frames", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ videoUrl: s.selectedAdVideoUrl }),
+        });
+      } else {
+        throw new Error("No video source selected");
+      }
+
+      if (!extractRes.ok) {
+        const err = await extractRes.json();
+        throw new Error(err.error || "Frame extraction failed");
+      }
+
+      const { frames, duration, fps } = await extractRes.json();
+      dispatch({ type: "SET_FRAMES", frames });
+
+      // Step 2: Send extracted frames to Gemini for analysis
+      const analyzeRes = await fetch("/api/studio/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ frames, fps, duration }),
+      });
+
+      if (!analyzeRes.ok) {
+        const err = await analyzeRes.json();
+        throw new Error(err.error || "Analysis failed");
+      }
+
+      const analysis = await analyzeRes.json();
+      dispatch({ type: "SET_ANALYSIS", analysis });
+      dispatch({ type: "SET_ANALYZING", v: false });
+    } catch (err) {
+      dispatch({
+        type: "SET_ANALYZE_ERROR",
+        error: err instanceof Error ? err.message : "Failed",
+      });
+    }
+  }, [s.sourceType, s.selectedAdVideoUrl, s.uploadedVideoFile]);
+
+  // ── Step 3: Image upload helpers ──
+
+  const handleImageUpload = useCallback(
+    async (
+      e: React.ChangeEvent<HTMLInputElement>,
+      field: "SET_PRODUCT_IMAGE" | "SET_CREATOR_IMAGE"
+    ) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const base64 = await fileToBase64(file);
+      dispatch({ type: field, data: base64 });
+    },
+    []
+  );
+
+  // ── Step 4: Generate script ──
+
+  const handleGenerateScript = useCallback(async () => {
+    dispatch({ type: "SET_GENERATING_SCRIPT", v: true });
+    try {
+      const res = await fetch("/api/studio/script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          analysis: s.analysis,
+          bigIdea: s.bigIdea,
+          productImage: s.productImage,
+          productInfo: s.productInfo,
+          targetAudience: s.targetAudience,
+          creatorImage: s.creatorImage,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      const { scenes: scriptScenes } = await res.json();
+      dispatch({ type: "SET_SCRIPT_SCENES", scriptScenes });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Script gen failed");
+    } finally {
+      dispatch({ type: "SET_GENERATING_SCRIPT", v: false });
+    }
+  }, [s.analysis, s.bigIdea, s.productImage, s.productInfo, s.targetAudience, s.creatorImage]);
+
+  // ── Step 5: Generate storyboard ──
+
+  const handleGenerateStoryboard = useCallback(async () => {
+    dispatch({ type: "SET_GENERATING_STORYBOARD", v: true });
+    try {
+      const res = await fetch("/api/studio/storyboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          analysis: s.analysis,
+          script: s.scriptScenes
+            .map((sc, i) => `Scene ${i + 1} [${sc.sceneType}]: ${sc.dialogue}`)
+            .join("\n"),
+          productImage: s.productImage,
+          productInfo: s.productInfo,
+          targetAudience: s.targetAudience,
+          creatorImage: s.creatorImage,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      const { scenes } = await res.json();
+      dispatch({ type: "SET_SCENES", scenes });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Storyboard gen failed");
+    } finally {
+      dispatch({ type: "SET_GENERATING_STORYBOARD", v: false });
+    }
+  }, [s.analysis, s.scriptScenes, s.productImage, s.productInfo, s.targetAudience, s.creatorImage]);
+
+  // ── Step 6: Upload references + generate assets ──
+
+  const ensureVidtoryUploads = useCallback(async () => {
+    let productUrl = s.productVidtoryUrl;
+    let creatorUrl = s.creatorVidtoryUrl;
+
+    if (!productUrl && s.productImage) {
+      const res = await fetch("/api/studio/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataUrl: s.productImage }),
+      });
+      const data = await res.json();
+      productUrl = data.url;
+    }
+    if (!creatorUrl && s.creatorImage) {
+      const res = await fetch("/api/studio/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataUrl: s.creatorImage }),
+      });
+      const data = await res.json();
+      creatorUrl = data.url;
+    }
+    dispatch({ type: "SET_VIDTORY_URLS", product: productUrl || undefined, creator: creatorUrl || undefined });
+    return { productUrl, creatorUrl };
+  }, [s.productImage, s.creatorImage, s.productVidtoryUrl, s.creatorVidtoryUrl]);
+
+  const handleGenerateImage = useCallback(
+    async (sceneId: string) => {
+      const scene = s.scenes.find((sc) => sc.id === sceneId);
+      if (!scene) return;
+
+      dispatch({
+        type: "UPDATE_SCENE",
+        id: sceneId,
+        patch: { isGeneratingImage: true, imageGenerationError: null },
+      });
+
+      try {
+        const { productUrl, creatorUrl } = await ensureVidtoryUploads();
+
+        let prompt = scene.imagePrompt;
+        if (scene.imageFocusObject) prompt = `Focus on: ${scene.imageFocusObject}. ${prompt}`;
+        if (scene.imageCameraAngle) prompt = `${scene.imageCameraAngle} shot. ${prompt}`;
+
+        const res = await fetch("/api/studio/generate-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt,
+            aspectRatio: s.aspectRatio,
+            characterUrl: creatorUrl,
+            productUrl,
+          }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error);
+        const { jobId } = await res.json();
+
+        dispatch({ type: "UPDATE_SCENE", id: sceneId, patch: { imageJobId: jobId } });
+
+        const imageUrl = await pollJob(jobId, 5000, 300000);
+
+        dispatch({
+          type: "UPDATE_SCENE",
+          id: sceneId,
+          patch: {
+            images: [...scene.images, imageUrl],
+            selectedImageForVideo: scene.selectedImageForVideo || imageUrl,
+            isGeneratingImage: false,
+          },
+        });
+      } catch (err) {
+        dispatch({
+          type: "UPDATE_SCENE",
+          id: sceneId,
+          patch: {
+            isGeneratingImage: false,
+            imageGenerationError:
+              err instanceof Error ? err.message : "Failed",
+          },
+        });
+      }
+    },
+    [s.scenes, s.aspectRatio, ensureVidtoryUploads]
+  );
+
+  const handleGenerateVideo = useCallback(
+    async (sceneId: string) => {
+      const scene = s.scenes.find((sc) => sc.id === sceneId);
+      if (!scene?.selectedImageForVideo) return;
+
+      dispatch({
+        type: "UPDATE_SCENE",
+        id: sceneId,
+        patch: { isGeneratingVideo: true, videoGenerationError: null },
+      });
+
+      try {
+        let prompt = `Motion/Action: ${scene.videoPrompt}`;
+        if (scene.includeDialogueInPrompt) {
+          prompt = `The creator is speaking.\n${prompt}`;
+          prompt += `\nDialogue in English: "${scene.voiceoverScript}"`;
+        }
+        prompt += "\n\nNo Music Background";
+
+        const res = await fetch("/api/studio/generate-video", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt,
+            aspectRatio: s.aspectRatio,
+            startImageUrl: scene.selectedImageForVideo,
+            duration: 5,
+          }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error);
+        const { jobId } = await res.json();
+
+        dispatch({ type: "UPDATE_SCENE", id: sceneId, patch: { videoJobId: jobId } });
+
+        const videoUrl = await pollJob(jobId, 10000, 900000);
+
+        dispatch({
+          type: "UPDATE_SCENE",
+          id: sceneId,
+          patch: {
+            videos: [
+              ...scene.videos,
+              { url: videoUrl, mediaGenerationId: jobId, seed: 0 },
+            ],
+            isGeneratingVideo: false,
+          },
+        });
+      } catch (err) {
+        dispatch({
+          type: "UPDATE_SCENE",
+          id: sceneId,
+          patch: {
+            isGeneratingVideo: false,
+            videoGenerationError:
+              err instanceof Error ? err.message : "Failed",
+          },
+        });
+      }
+    },
+    [s.scenes, s.aspectRatio]
+  );
+
+  const handleGenerateAudio = useCallback(
+    async (sceneId: string) => {
+      const scene = s.scenes.find((sc) => sc.id === sceneId);
+      if (!scene) return;
+
+      dispatch({
+        type: "UPDATE_SCENE",
+        id: sceneId,
+        patch: { isGeneratingAudio: true, audioGenerationError: null },
+      });
+
+      try {
+        const res = await fetch("/api/studio/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: scene.voiceoverScript,
+            guide: scene.voiceoverGuide,
+            voice: s.voice,
+          }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error);
+        const { audioBase64 } = await res.json();
+
+        const bytes = Uint8Array.from(atob(audioBase64), (c) =>
+          c.charCodeAt(0)
+        );
+        const blob = new Blob([bytes], { type: "audio/wav" });
+        const audioUrl = URL.createObjectURL(blob);
+
+        dispatch({
+          type: "UPDATE_SCENE",
+          id: sceneId,
+          patch: { audioUrl, isGeneratingAudio: false },
+        });
+      } catch (err) {
+        dispatch({
+          type: "UPDATE_SCENE",
+          id: sceneId,
+          patch: {
+            isGeneratingAudio: false,
+            audioGenerationError:
+              err instanceof Error ? err.message : "Failed",
+          },
+        });
+      }
+    },
+    [s.scenes, s.voice]
+  );
+
+  const handleGenerateAllImages = useCallback(async () => {
+    const tasks = s.scenes
+      .filter((sc) => sc.images.length === 0 && !sc.isGeneratingImage)
+      .map((sc) => sc.id);
+
+    // Concurrency limit of 3
+    const running: Promise<void>[] = [];
+    for (const id of tasks) {
+      const p = handleGenerateImage(id);
+      running.push(p);
+      if (running.length >= 3) {
+        await Promise.race(running);
+        running.splice(
+          running.findIndex((r) => r === p),
+          1
+        );
+      }
+    }
+    await Promise.all(running);
+  }, [s.scenes, handleGenerateImage]);
+
+  const handleGenerateAllAudio = useCallback(async () => {
+    const tasks = s.scenes
+      .filter((sc) => !sc.audioUrl && !sc.isGeneratingAudio)
+      .map((sc) => sc.id);
+
+    const running: Promise<void>[] = [];
+    for (const id of tasks) {
+      const p = handleGenerateAudio(id);
+      running.push(p);
+      if (running.length >= 3) {
+        await Promise.race(running);
+        running.splice(
+          running.findIndex((r) => r === p),
+          1
+        );
+      }
+    }
+    await Promise.all(running);
+  }, [s.scenes, handleGenerateAudio]);
+
+  const handleEnhancePrompt = useCallback(
+    async (sceneId: string, promptType: "image" | "video") => {
+      const scene = s.scenes.find((sc) => sc.id === sceneId);
+      if (!scene) return;
+
+      try {
+        const res = await fetch("/api/studio/enhance-prompt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectContext: `Product: ${s.productInfo}\nAudience: ${s.targetAudience}\nBig Idea: ${s.bigIdea}`,
+            scene,
+            promptType,
+            productImage: s.productImage,
+            creatorImage: s.creatorImage,
+          }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error);
+        const { enhancedPrompt } = await res.json();
+
+        dispatch({
+          type: "UPDATE_SCENE",
+          id: sceneId,
+          patch:
+            promptType === "image"
+              ? { imagePrompt: enhancedPrompt }
+              : { videoPrompt: enhancedPrompt },
+        });
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Enhancement failed");
+      }
+    },
+    [s.scenes, s.productInfo, s.targetAudience, s.bigIdea, s.productImage, s.creatorImage]
+  );
+
+  // ── Render ─────────────────────────────────────────────────
+
+  return (
+    <div className="min-h-screen p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <Clapperboard size={28} className="text-emerald-400" />
+        <h1 className="text-2xl font-bold">Video Ad Studio</h1>
+        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+          Clone &amp; Improve
+        </span>
+      </div>
+
+      {/* Step indicator */}
+      <div className="flex items-center gap-1">
+        {STEPS.map((st, i) => {
+          const StepIcon = st.icon;
+          const stepNum = i + 1;
+          const isCurrent = s.step === stepNum;
+          const isDone = s.step > stepNum;
+          return (
+            <div key={st.label} className="flex items-center">
+              <button
+                onClick={() => stepNum <= s.step && dispatch({ type: "SET_STEP", step: stepNum })}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  isCurrent
+                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                    : isDone
+                    ? "bg-muted text-foreground cursor-pointer hover:bg-muted/80"
+                    : "text-muted-foreground cursor-default"
+                }`}
+              >
+                {isDone ? (
+                  <Check size={14} className="text-emerald-400" />
+                ) : (
+                  <StepIcon size={14} />
+                )}
+                <span className="hidden sm:inline">{st.label}</span>
+                <span className="sm:hidden">{stepNum}</span>
+              </button>
+              {i < STEPS.length - 1 && (
+                <ChevronRight size={14} className="text-muted-foreground mx-0.5" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Step content */}
+      <div className="bg-card border border-border rounded-lg p-6 min-h-[400px]">
+        {/* ── STEP 1: Source ── */}
+        {s.step === 1 && (
+          <div className="space-y-6">
+            <h2 className="text-lg font-semibold">Choose Source Video</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* From DB */}
+              <div
+                className={`border rounded-lg p-4 space-y-3 cursor-pointer transition-colors ${
+                  s.sourceType === "db"
+                    ? "border-emerald-500 bg-emerald-500/5"
+                    : "border-border hover:border-muted-foreground"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Database size={18} />
+                  <span className="font-medium">From Crawled Ads</span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search by brand..."
+                  className="w-full bg-background border border-border rounded px-3 py-2 text-sm"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <div className="max-h-60 overflow-y-auto space-y-1">
+                  {dbAds
+                    .filter(
+                      (a) =>
+                        !searchTerm ||
+                        a.brand
+                          ?.toLowerCase()
+                          .includes(searchTerm.toLowerCase())
+                    )
+                    .slice(0, 30)
+                    .map((ad) => (
+                      <button
+                        key={ad.id}
+                        onClick={() =>
+                          dispatch({
+                            type: "SET_SOURCE_DB",
+                            adId: ad.id,
+                            videoUrl: ad.videoUrl!,
+                            brand: ad.brand,
+                          })
+                        }
+                        className={`w-full text-left px-3 py-2 rounded text-sm flex items-center justify-between transition-colors ${
+                          s.selectedAdId === ad.id
+                            ? "bg-emerald-500/20 text-emerald-300"
+                            : "hover:bg-muted"
+                        }`}
+                      >
+                        <span className="truncate">
+                          {ad.brand} — {ad.region}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-2">
+                          {ad.adScore?.toFixed(1)}
+                        </span>
+                      </button>
+                    ))}
+                  {dbAds.length === 0 && (
+                    <p className="text-sm text-muted-foreground py-2">
+                      No ads in DB. Run a crawl first or upload a video.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Upload */}
+              <div
+                className={`border rounded-lg p-4 space-y-3 transition-colors ${
+                  s.sourceType === "upload"
+                    ? "border-emerald-500 bg-emerald-500/5"
+                    : "border-border hover:border-muted-foreground"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Upload size={18} />
+                  <span className="font-medium">Upload Video</span>
+                </div>
+                <label className="block border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-muted-foreground transition-colors">
+                  <input
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={handleUploadVideo}
+                  />
+                  <Upload
+                    size={24}
+                    className="mx-auto mb-2 text-muted-foreground"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Drop or click to upload a video ad
+                  </p>
+                </label>
+                {s.uploadedVideoUrl && (
+                  <video
+                    src={s.uploadedVideoUrl}
+                    controls
+                    className="w-full max-h-48 rounded"
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Preview for DB selection */}
+            {s.sourceType === "db" && s.selectedAdVideoUrl && (
+              <div className="mt-4">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Preview: {s.selectedAdBrand}
+                </p>
+                <video
+                  ref={videoRef}
+                  src={`/api/video-proxy?url=${encodeURIComponent(s.selectedAdVideoUrl)}`}
+                  controls
+                  crossOrigin="anonymous"
+                  className="w-full max-h-64 rounded"
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── STEP 2: Analyze ── */}
+        {s.step === 2 && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Frame Extraction & Analysis</h2>
+              <button
+                onClick={extractFrames}
+                disabled={s.isAnalyzing}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-2 rounded-md text-sm font-medium"
+              >
+                {s.isAnalyzing ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Sparkles size={16} />
+                )}
+                {s.isAnalyzing
+                  ? s.frames.length > 0
+                    ? "Analyzing..."
+                    : "Extracting frames..."
+                  : "Extract & Analyze"}
+              </button>
+            </div>
+
+            {s.analyzeError && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-md p-3 text-sm text-red-400">
+                {s.analyzeError}
+              </div>
+            )}
+
+            {/* Frame thumbnails */}
+            {s.frames.length > 0 && (
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">
+                  {s.frames.length} frames extracted
+                </p>
+                <div className="flex gap-1 overflow-x-auto pb-2">
+                  {s.frames.slice(0, 20).map((f, i) => (
+                    <img
+                      key={i}
+                      src={f}
+                      alt={`Frame ${i}`}
+                      className="h-16 rounded border border-border shrink-0"
+                    />
+                  ))}
+                  {s.frames.length > 20 && (
+                    <div className="h-16 w-16 flex items-center justify-center bg-muted rounded text-xs text-muted-foreground shrink-0">
+                      +{s.frames.length - 20}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Analysis result */}
+            {s.analysis && (
+              <div className="space-y-4">
+                <div className="bg-muted/50 rounded-md p-4">
+                  <h3 className="text-sm font-medium mb-1">Music & Pacing</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {s.analysis.musicAndPacing}
+                  </p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium mb-2">
+                    Scene Breakdown ({s.analysis.sceneBreakdown.length} scenes)
+                  </h3>
+                  <div className="space-y-2">
+                    {s.analysis.sceneBreakdown.map((scene) => (
+                      <div
+                        key={scene.scene_id}
+                        className="bg-muted/30 rounded-md p-3 grid grid-cols-[80px_100px_1fr_1fr] gap-3 text-sm"
+                      >
+                        <span className="text-muted-foreground font-mono">
+                          {scene.time}
+                        </span>
+                        <span className="capitalize font-medium text-emerald-400">
+                          {scene.type}
+                        </span>
+                        <span className="text-muted-foreground">{scene.visual}</span>
+                        <span className="italic text-muted-foreground">
+                          &ldquo;{scene.speech}&rdquo;
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── STEP 3: Product Setup ── */}
+        {s.step === 3 && (
+          <div className="space-y-6">
+            <h2 className="text-lg font-semibold">Product & Creator Setup</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Product image */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Product Image <span className="text-red-400">*</span>
+                </label>
+                <label className="block border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-muted-foreground transition-colors">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleImageUpload(e, "SET_PRODUCT_IMAGE")}
+                  />
+                  {s.productImage ? (
+                    <img
+                      src={s.productImage}
+                      alt="Product"
+                      className="h-32 mx-auto rounded"
+                    />
+                  ) : (
+                    <>
+                      <ImageIcon
+                        size={24}
+                        className="mx-auto mb-2 text-muted-foreground"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Upload product image
+                      </p>
+                    </>
+                  )}
+                </label>
+              </div>
+
+              {/* Creator image */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Creator/Character Image (optional)
+                </label>
+                <label className="block border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-muted-foreground transition-colors">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleImageUpload(e, "SET_CREATOR_IMAGE")}
+                  />
+                  {s.creatorImage ? (
+                    <img
+                      src={s.creatorImage}
+                      alt="Creator"
+                      className="h-32 mx-auto rounded"
+                    />
+                  ) : (
+                    <>
+                      <ImageIcon
+                        size={24}
+                        className="mx-auto mb-2 text-muted-foreground"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Upload creator face
+                      </p>
+                    </>
+                  )}
+                </label>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">
+                  Big Idea / Core Message <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={s.bigIdea}
+                  onChange={(e) =>
+                    dispatch({
+                      type: "SET_FIELD",
+                      field: "bigIdea",
+                      value: e.target.value,
+                    })
+                  }
+                  placeholder='e.g. "This creatine gummy changed my gym performance in 2 weeks"'
+                  className="w-full bg-background border border-border rounded px-3 py-2 text-sm mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Product Info</label>
+                <textarea
+                  value={s.productInfo}
+                  onChange={(e) =>
+                    dispatch({
+                      type: "SET_FIELD",
+                      field: "productInfo",
+                      value: e.target.value,
+                    })
+                  }
+                  placeholder="Creatine monohydrate gummies, 5g per serving, berry flavor..."
+                  className="w-full bg-background border border-border rounded px-3 py-2 text-sm mt-1 h-20 resize-y"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Target Audience</label>
+                <input
+                  type="text"
+                  value={s.targetAudience}
+                  onChange={(e) =>
+                    dispatch({
+                      type: "SET_FIELD",
+                      field: "targetAudience",
+                      value: e.target.value,
+                    })
+                  }
+                  placeholder="Men 18-35 interested in fitness and bodybuilding"
+                  className="w-full bg-background border border-border rounded px-3 py-2 text-sm mt-1"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 4: Script ── */}
+        {s.step === 4 && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">
+                Cloned Script ({s.scriptScenes.length} scenes)
+              </h2>
+              <button
+                onClick={handleGenerateScript}
+                disabled={s.isGeneratingScript}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-2 rounded-md text-sm font-medium"
+              >
+                {s.isGeneratingScript ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Sparkles size={16} />
+                )}
+                {s.scriptScenes.length > 0 ? "Regenerate" : "Generate Script"}
+              </button>
+            </div>
+
+            {s.analysis && (
+              <div className="bg-muted/30 rounded-md p-3">
+                <p className="text-xs text-muted-foreground mb-1">Original structure:</p>
+                <div className="flex gap-2 flex-wrap">
+                  {s.analysis.sceneBreakdown.map((sc) => (
+                    <span
+                      key={sc.scene_id}
+                      className="text-xs px-2 py-0.5 bg-muted rounded capitalize"
+                    >
+                      {sc.type}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {s.scriptScenes.length === 0 && !s.isGeneratingScript && (
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                Click &ldquo;Generate Script&rdquo; to create a multi-scene script based on the analysis.
+              </p>
+            )}
+
+            <div className="space-y-3">
+              {s.scriptScenes.map((sc, i) => (
+                <div
+                  key={i}
+                  className="bg-muted/20 border border-border rounded-lg p-4 space-y-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-emerald-400">
+                      Scene {i + 1}
+                    </span>
+                    <span className="text-xs px-2 py-0.5 bg-muted rounded capitalize">
+                      {sc.sceneType}
+                    </span>
+                    {s.analysis?.sceneBreakdown[i] && (
+                      <span className="text-xs text-muted-foreground ml-auto">
+                        Original: {s.analysis.sceneBreakdown[i].time}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Dialogue / Voiceover</label>
+                    <textarea
+                      value={sc.dialogue}
+                      onChange={(e) =>
+                        dispatch({
+                          type: "UPDATE_SCRIPT_SCENE",
+                          index: i,
+                          patch: { dialogue: e.target.value },
+                        })
+                      }
+                      className="w-full bg-background border border-border rounded px-3 py-2 text-sm h-20 resize-y mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Direction / Tone</label>
+                    <input
+                      type="text"
+                      value={sc.direction}
+                      onChange={(e) =>
+                        dispatch({
+                          type: "UPDATE_SCRIPT_SCENE",
+                          index: i,
+                          patch: { direction: e.target.value },
+                        })
+                      }
+                      className="w-full bg-background border border-border rounded px-3 py-2 text-sm mt-1"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 5: Storyboard ── */}
+        {s.step === 5 && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">
+                Storyboard ({s.scenes.length} scenes)
+              </h2>
+              <button
+                onClick={handleGenerateStoryboard}
+                disabled={s.isGeneratingStoryboard}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-4 py-2 rounded-md text-sm font-medium"
+              >
+                {s.isGeneratingStoryboard ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Sparkles size={16} />
+                )}
+                {s.scenes.length > 0 ? "Regenerate" : "Generate Storyboard"}
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {s.scenes.map((scene, i) => (
+                <div
+                  key={scene.id}
+                  className="bg-muted/20 border border-border rounded-lg p-4 space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-emerald-400">
+                      Scene {i + 1}
+                    </span>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleEnhancePrompt(scene.id, "image")}
+                        className="text-xs px-2 py-1 bg-muted hover:bg-muted/80 rounded flex items-center gap-1"
+                        title="Enhance image prompt"
+                      >
+                        <Wand2 size={12} /> Image
+                      </button>
+                      <button
+                        onClick={() => handleEnhancePrompt(scene.id, "video")}
+                        className="text-xs px-2 py-1 bg-muted hover:bg-muted/80 rounded flex items-center gap-1"
+                        title="Enhance video prompt"
+                      >
+                        <Wand2 size={12} /> Video
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground">
+                        Voiceover Script
+                      </label>
+                      <textarea
+                        value={scene.voiceoverScript}
+                        onChange={(e) =>
+                          dispatch({
+                            type: "UPDATE_SCENE",
+                            id: scene.id,
+                            patch: { voiceoverScript: e.target.value },
+                          })
+                        }
+                        className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm h-16 resize-y"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">
+                        Voiceover Guide
+                      </label>
+                      <input
+                        type="text"
+                        value={scene.voiceoverGuide}
+                        onChange={(e) =>
+                          dispatch({
+                            type: "UPDATE_SCENE",
+                            id: scene.id,
+                            patch: { voiceoverGuide: e.target.value },
+                          })
+                        }
+                        className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">
+                        Image Prompt
+                      </label>
+                      <textarea
+                        value={scene.imagePrompt}
+                        onChange={(e) =>
+                          dispatch({
+                            type: "UPDATE_SCENE",
+                            id: scene.id,
+                            patch: { imagePrompt: e.target.value },
+                          })
+                        }
+                        className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm h-20 resize-y"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">
+                        Video Prompt
+                      </label>
+                      <textarea
+                        value={scene.videoPrompt}
+                        onChange={(e) =>
+                          dispatch({
+                            type: "UPDATE_SCENE",
+                            id: scene.id,
+                            patch: { videoPrompt: e.target.value },
+                          })
+                        }
+                        className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm h-20 resize-y"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 6: Generate Assets ── */}
+        {s.step === 6 && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <h2 className="text-lg font-semibold">Generate Assets</h2>
+              <div className="flex gap-2 flex-wrap">
+                <select
+                  value={s.aspectRatio}
+                  onChange={(e) =>
+                    dispatch({
+                      type: "SET_FIELD",
+                      field: "aspectRatio",
+                      value: e.target.value,
+                    })
+                  }
+                  className="bg-background border border-border rounded px-2 py-1 text-sm"
+                >
+                  <option value="9:16">9:16 (Portrait)</option>
+                  <option value="16:9">16:9 (Landscape)</option>
+                  <option value="1:1">1:1 (Square)</option>
+                </select>
+                <select
+                  value={s.voice}
+                  onChange={(e) =>
+                    dispatch({
+                      type: "SET_FIELD",
+                      field: "voice",
+                      value: e.target.value,
+                    })
+                  }
+                  className="bg-background border border-border rounded px-2 py-1 text-sm"
+                >
+                  {VOICES.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleGenerateAllImages}
+                  className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm"
+                >
+                  <ImageIcon size={14} /> All Images
+                </button>
+                <button
+                  onClick={handleGenerateAllAudio}
+                  className="flex items-center gap-1 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm"
+                >
+                  <Volume2 size={14} /> All Audio
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {s.scenes.map((scene, i) => (
+                <div
+                  key={scene.id}
+                  className="bg-muted/20 border border-border rounded-lg p-4"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-sm font-medium text-emerald-400">
+                      Scene {i + 1}
+                    </span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      {scene.voiceoverScript.slice(0, 60)}...
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Image column */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium">Image</span>
+                        <button
+                          onClick={() => handleGenerateImage(scene.id)}
+                          disabled={scene.isGeneratingImage}
+                          className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded flex items-center gap-1"
+                        >
+                          {scene.isGeneratingImage ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <ImageIcon size={12} />
+                          )}
+                          Gen
+                        </button>
+                      </div>
+                      {scene.imageGenerationError && (
+                        <p className="text-xs text-red-400">
+                          {scene.imageGenerationError}
+                        </p>
+                      )}
+                      <div className="flex gap-1 flex-wrap">
+                        {scene.images.map((img, j) => (
+                          <img
+                            key={j}
+                            src={img}
+                            alt={`Scene ${i + 1} image ${j}`}
+                            onClick={() =>
+                              dispatch({
+                                type: "UPDATE_SCENE",
+                                id: scene.id,
+                                patch: { selectedImageForVideo: img },
+                              })
+                            }
+                            className={`h-20 rounded cursor-pointer border-2 transition-colors ${
+                              scene.selectedImageForVideo === img
+                                ? "border-emerald-500"
+                                : "border-transparent hover:border-muted-foreground"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Video column */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium">Video</span>
+                        <button
+                          onClick={() => handleGenerateVideo(scene.id)}
+                          disabled={
+                            scene.isGeneratingVideo ||
+                            !scene.selectedImageForVideo
+                          }
+                          className="text-xs px-2 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded flex items-center gap-1"
+                        >
+                          {scene.isGeneratingVideo ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <Video size={12} />
+                          )}
+                          Gen
+                        </button>
+                      </div>
+                      {scene.videoGenerationError && (
+                        <p className="text-xs text-red-400">
+                          {scene.videoGenerationError}
+                        </p>
+                      )}
+                      {scene.videos.map((v, j) => (
+                        <video
+                          key={j}
+                          src={v.url}
+                          controls
+                          className="w-full max-h-32 rounded"
+                        />
+                      ))}
+                    </div>
+
+                    {/* Audio column */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium">Audio</span>
+                        <button
+                          onClick={() => handleGenerateAudio(scene.id)}
+                          disabled={scene.isGeneratingAudio}
+                          className="text-xs px-2 py-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded flex items-center gap-1"
+                        >
+                          {scene.isGeneratingAudio ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : (
+                            <Volume2 size={12} />
+                          )}
+                          Gen
+                        </button>
+                      </div>
+                      {scene.audioGenerationError && (
+                        <p className="text-xs text-red-400">
+                          {scene.audioGenerationError}
+                        </p>
+                      )}
+                      {scene.audioUrl && (
+                        <audio
+                          src={scene.audioUrl}
+                          controls
+                          className="w-full"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 7: Preview ── */}
+        {s.step === 7 && (
+          <div className="space-y-6">
+            <h2 className="text-lg font-semibold">Preview & Download</h2>
+            <p className="text-sm text-muted-foreground">
+              Review all generated scene assets. Download individual clips or combine them using a video editor.
+            </p>
+
+            <div className="space-y-6">
+              {s.scenes.map((scene, i) => (
+                <div
+                  key={scene.id}
+                  className="bg-muted/20 border border-border rounded-lg p-4 space-y-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-emerald-400">
+                      Scene {i + 1}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {scene.voiceoverScript}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Video */}
+                    <div>
+                      {scene.videos[0] ? (
+                        <div className="space-y-1">
+                          <video
+                            src={scene.videos[0].url}
+                            controls
+                            className="w-full rounded"
+                          />
+                          <a
+                            href={scene.videos[0].url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-400 hover:underline flex items-center gap-1"
+                          >
+                            <Download size={12} /> Download clip
+                          </a>
+                        </div>
+                      ) : scene.images[0] ? (
+                        <img
+                          src={scene.images[0]}
+                          alt={`Scene ${i + 1}`}
+                          className="w-full rounded"
+                        />
+                      ) : (
+                        <div className="h-32 bg-muted rounded flex items-center justify-center text-muted-foreground text-sm">
+                          No media
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Script + Guide */}
+                    <div className="space-y-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Script</p>
+                        <p className="text-sm">{scene.voiceoverScript}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Guide</p>
+                        <p className="text-sm italic">{scene.voiceoverGuide}</p>
+                      </div>
+                    </div>
+
+                    {/* Audio */}
+                    <div>
+                      {scene.audioUrl ? (
+                        <audio
+                          src={scene.audioUrl}
+                          controls
+                          className="w-full"
+                        />
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No audio generated
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {s.scenes.some((sc) => sc.videos.length > 0) && (
+              <div className="bg-muted/30 rounded-md p-4">
+                <p className="text-sm text-muted-foreground">
+                  To combine clips into a final video, download each clip above and use a video editor
+                  (CapCut, Premiere, DaVinci Resolve) or ffmpeg to concatenate them with the audio tracks.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Navigation buttons */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() =>
+            dispatch({ type: "SET_STEP", step: Math.max(1, s.step - 1) })
+          }
+          disabled={s.step === 1}
+          className="flex items-center gap-1 text-sm px-4 py-2 bg-muted hover:bg-muted/80 disabled:opacity-30 rounded-md"
+        >
+          <ChevronLeft size={16} /> Back
+        </button>
+        <span className="text-sm text-muted-foreground">
+          Step {s.step} of {STEPS.length}
+        </span>
+        <button
+          onClick={() =>
+            dispatch({
+              type: "SET_STEP",
+              step: Math.min(STEPS.length, s.step + 1),
+            })
+          }
+          disabled={s.step === STEPS.length || !canNext()}
+          className="flex items-center gap-1 text-sm px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-30 text-white rounded-md"
+        >
+          Next <ChevronRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}

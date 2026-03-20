@@ -30,6 +30,12 @@ interface TrendingAd {
 
 const MARKETS = ["ALL", "US", "UK", "AU"];
 const PERIODS = ["7d", "30d", "90d", "all"];
+const MAX_AGE_OPTIONS = [
+  { label: "90d", value: "90" },
+  { label: "180d", value: "180" },
+  { label: "365d", value: "365" },
+  { label: "All", value: "9999" },
+];
 
 function adScoreClasses(s: number): string {
   if (s >= 7) return "bg-green-500 text-white";
@@ -46,6 +52,7 @@ export default function TrendingPage() {
   const [market, setMarket] = useState("ALL");
   const [period, setPeriod] = useState("all");
   const [minLongevity, setMinLongevity] = useState("14");
+  const [maxAge, setMaxAge] = useState("365");
   const [hookType, setHookType] = useState("");
 
   const [videoModal, setVideoModal] = useState<{
@@ -68,6 +75,7 @@ export default function TrendingPage() {
         limit: "50",
         market,
         minLongevity,
+        maxAge,
         period,
       });
       if (hookType) params.set("hookType", hookType);
@@ -80,7 +88,7 @@ export default function TrendingPage() {
       setAds([]);
     }
     setLoading(false);
-  }, [market, period, minLongevity, hookType]);
+  }, [market, period, minLongevity, maxAge, hookType]);
 
   useEffect(() => {
     fetchTrending();
@@ -92,7 +100,7 @@ export default function TrendingPage() {
       <header className="mb-6">
         <h1 className="text-2xl font-bold">Trending Ads</h1>
         <p className="text-muted-foreground mt-1">
-          Top performing video ads across all brands and markets
+          Ads rising fast — ranked by impression velocity, iteration speed, and recency
         </p>
       </header>
 
@@ -151,6 +159,25 @@ export default function TrendingPage() {
                 className="w-20 h-8 text-sm"
               />
               <span className="text-sm text-muted-foreground">days</span>
+            </div>
+          </div>
+
+          {/* Max Age */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Max Age
+            </span>
+            <div className="flex gap-1.5">
+              {MAX_AGE_OPTIONS.map((opt) => (
+                <Button
+                  key={opt.value}
+                  size="sm"
+                  variant={maxAge === opt.value ? "default" : "outline"}
+                  onClick={() => setMaxAge(opt.value)}
+                >
+                  {opt.label}
+                </Button>
+              ))}
             </div>
           </div>
 
