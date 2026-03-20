@@ -2,7 +2,7 @@
 // Handles all Google Gemini API calls for the Studio pipeline.
 
 import { GoogleGenAI, Modality, type Part } from "@google/genai";
-import type { VideoAnalysis, StoryboardScene } from "./types";
+import type { VideoAnalysis, StoryboardScene, RollType } from "./types";
 import { createDefaultScene } from "./types";
 
 function getClient() {
@@ -13,14 +13,36 @@ function getClient() {
 
 // ── System Instructions ──────────────────────────────────────
 
-const VIDEO_ANALYSIS_INSTRUCTION = `You are a professional video ad deconstructor. Your mission is to analyze a sequence of keyframes from a video ad and output a structured breakdown in JSON format.
+const VIDEO_ANALYSIS_INSTRUCTION = `You are an expert video ad deconstructor. Your mission is to analyze a sequence of keyframes from a video ad and output an extremely detailed structured breakdown in JSON format.
 
-Tasks:
-1. Automatically cut scenes by timestamp based on the frame sequence.
-2. Label each scene's marketing purpose: problem, product, benefit, proof, social-proof, mechanism, offer, CTA.
-3. Extract: visual description, voiceover/text transcript, overall music/pacing summary.
+## SCENE CUTTING RULES
+- A new scene starts whenever the PRIMARY VISUAL changes: different camera angle, different subject/object, different background, text overlay appears/changes, transition effect, or visual style shift (e.g., real footage → anatomy diagram)
+- Video ads change scenes RAPIDLY — most scenes are 1-4 seconds. A 30-second ad typically has 8-15 scenes. A 50-second ad typically has 12-25 scenes.
+- Do NOT merge visually distinct moments into one long scene. If the visual changes, it's a new scene.
+- Between two distinct visuals, there is often a frame with text overlay / voiceover — this counts as its own scene or belongs to whichever visual it overlays.
+- Each scene time should be precise (e.g., "2.5s - 4.0s" not "0s - 6.57s")
 
-Output: JSON object with sceneBreakdown[] and musicAndPacing.`;
+## SCENE TYPE CLASSIFICATION
+Label each scene with its marketing purpose AND its visual roll type:
+- Marketing purpose: hook, problem, product, benefit, proof, social-proof, mechanism, offer, CTA, transition, text-overlay
+- Visual roll type (append in parentheses):
+  - (A-Roll) = talking head, person speaking to camera, lip-sync
+  - (B-Roll) = product interaction, person holding/using product silently
+  - (C-Roll) = concept visual, anatomy diagram, science animation, infographic, abstract
+
+## SPEECH/TEXT EXTRACTION
+- Extract the COMPLETE voiceover script for each scene — every word spoken or shown as text overlay
+- Include text overlays verbatim in CAPS (e.g., "WHAT ACTUALLY CHANGES IN 30 DAYS")
+- If there's both voiceover AND text overlay, include both: "VO: [speech] | TEXT: [overlay]"
+- Do NOT summarize or paraphrase — write the EXACT words
+
+## VISUAL DESCRIPTION
+- Describe each scene in RICH detail: subject appearance, clothing, pose, camera angle, lighting, background, product visibility, color palette, motion/animation type
+- For anatomy/science scenes: name specific anatomical structures visible, glow colors, animation behavior
+- For product scenes: exact product appearance, how it's held, branding visible
+- For talking head: expression, gesture, eye direction, setting
+
+Output: JSON object with sceneBreakdown[] and musicAndPacing (include BPM estimate, energy level, genre).`;
 
 const CLONED_SCRIPT_INSTRUCTION = `You are an expert scriptwriter for high-converting short-form video ads.
 Create a NEW multi-scene script for a NEW product that strictly follows the structure of the original ad.
@@ -34,26 +56,189 @@ CRITICAL RULES:
 - Write for the NEW product, NEW audience, NEW big idea — not the original.
 - Make the script sound natural, conversational, and authentic (like a real person talking on camera).
 
+## META ADS AI STACK — CREATIVE STRATEGY CONTEXT
+Meta's Andromeda retrieval system uses creative embeddings to determine who sees ads. Creative diversity is
+the primary mechanism for reaching different audiences ("Creative is the new targeting"). The MOTIVATOR,
+EMOTIONAL TONE, and STORYLINE TYPE selected below should deeply influence the hook, language, and
+narrative structure of the script — not just be surface-level tweaks.
+
+### MOTIVATOR FRAMEWORK (10 types)
+Each motivator targets a different psychological driver. The script's HOOK (first scene) must clearly embody
+the selected motivator:
+- Pain Point: Open with frustration/problem. Hook pattern: "Tired of [X]?" / "Stop wasting [Y] on [Z]"
+- Pleasure/Aspiration: Open with desired outcome. Hook: "Imagine waking up to [outcome]" / "Finally feel [emotion]"
+- Social Proof: Open with validation. Hook: "[Number] people can't be wrong" / "Why everyone's switching"
+- Curiosity: Open with information gap. Hook: "The secret [industry] doesn't want you to know"
+- Fear/Urgency: Open with scarcity. Hook: "Last chance to [benefit]" / "[Time] left"
+- Identity: Open with persona. Hook: "For [persona] who [behavior]" / "Not for everyone"
+- Feature-Led: Open with attribute. Hook: "Made for [need]" / "The only [product] with [feature]"
+- Problem/Solution: Classic before/after. Hook: "Tired of X? Here's how to fix it"
+- Authority/Expert: Open with credibility. Hook: "Doctor-recommended" / "Expert-approved"
+- Comparison: Position against alternatives. Hook: "Why this beats your current solution"
+
+### EMOTIONAL TONE
+The tone must be consistent across ALL scenes (not just the hook):
+- Inspirational: Aspiration, transformation, possibility
+- Relatable/Problem-first: Acknowledge pain, empathize, then solve
+- Urgent/Limited-time: Scarcity, FOMO, time pressure
+- Calm/Reassuring: Trust, premium quality, safety
+- Humorous/Satirical: Pattern interrupt, exaggeration, wit
+- Educational: Inform, explain, build consideration
+- Emotional/Heartfelt: Meaningful, touching, gift-worthy
+
+### STORYLINE TYPE
+The overall narrative arc should follow the selected storyline:
+- Founder Origin Story: Why the product was created, personal mission
+- Day-in-the-Life: Product woven into authentic daily routine
+- Problem/Solution: Before state → struggle → discovery → after state
+- Things You Didn't Know: Surprising facts, education-first
+- Behind the Scenes: How it's made, transparency, craft
+- Testimonial/Review: Customer perspective, real experience
+- Unboxing/First Impression: Discovery, delight, first use
+
 OUTPUT FORMAT:
 Return a JSON object with a "scenes" array. Each element has:
 - "sceneType": the marketing purpose (matching the original scene type)
 - "dialogue": the full voiceover/spoken text for that scene (2-4 sentences, detailed)
 - "direction": brief visual/tone note for the scene`;
 
-const CLONED_STORYBOARD_INSTRUCTION = `You are an expert video director specializing in recreating successful ad structures.
+const PROMPT_FRAMEWORK = `
+## ROLL TYPE TAXONOMY
+Every scene MUST be classified as one of three roll types:
+
+| Roll | Purpose | Camera | Product | Talent Speech |
+|------|---------|--------|---------|---------------|
+| C-Roll | Concept / Science Visual | Locked, no movement | None or minimal | None |
+| B-Roll | Character + Product Interaction | Handheld or locked | Hero element | None (silent) |
+| A-Roll | Talking Head / Hero Shot | Handheld UGC feel | Visible, branded | Lip-sync voiceover |
+
+## SHARED PRINCIPLES (ALL ROLL TYPES)
+
+### Skin Realism Hierarchy
+- A-Roll: Pores, acne, blemishes, stretch marks, ashiness, razor bumps
+- B-Roll: Pores, oil sheen, hyperpigmentation, knuckle texture
+- C-Roll: Ghost-skin only (10-15% opacity over anatomy)
+
+### Expression Control
+- Always specify what the face IS doing AND what it is NOT doing
+- Video: triple-lock expressions ("neutral, stone-faced, no mouth movement")
+- Never leave expression unspecified — models default to slight smile
+
+### Product Accuracy Checklist
+- Exact color (pale sage green, not bright green)
+- Exact size (1.5cm diameter gummy, 5x7cm sachet)
+- Exact material finish (soft matte, slightly translucent)
+- Exact branding text (readable on product)
+- Grip method (which fingers, which hand)
+
+### Anti-AI Rendering Cues (append to VIDEO prompts)
+- "Shot on Sony A7IV, 85mm lens, natural color grading" (for B-Roll/C-Roll)
+- "Shot on iPhone 15 Pro, portrait mode, f/1.8" (for A-Roll UGC)
+- "1600 ISO grain. No color grade. Unfiltered." (for A-Roll night scenes)
+
+### Universal Negative Constraints (include in image prompts)
+- No tattoos, no jewelry (unless specified), no logos (unless branded product)
+- No perfect symmetry, no cartoonish rendering
+- No watermarks, no text overlays, no HUD elements
+- No AI-smooth skin (specify per roll type)
+
+## IMAGE PROMPT RULES
+All image prompts must be DETAILED paragraphs (not JSON). Include:
+- **A-Roll**: Open with "Hyperrealistic photography". Specify: subject demographics, face micro-expression (muscle-level), 3+ skin imperfections by name/location, practical lighting only (from objects IN scene), specific background with 3-5 named objects, product branding readable, camera lens + aperture + grain, negative prompt section
+- **B-Roll**: Focus on product interaction. Specify: exact hand positions (which fingers grip/curl), product dimensions + size comparison, 5+ skin realism markers, expression = anti-selling (unbothered/casual), hair with anti-pattern ("NOT salon locs, real freeform dreads"), camera as phone (iPhone 15 Pro)
+- **C-Roll**: Anatomy IS the image. Specify: named anatomical structures with fiber directions, color per layer (bone/muscle/cartilage distinct), ghost-skin 10-15% opacity, glow intensity varies by structure, dark background, self-illumination
+
+## VIDEO PROMPT RULES
+**HARD LIMIT: 2,500 characters.** Video models truncate beyond this.
+
+Compression strategy:
+1. Skip face structure details — reference image carries them
+2. Merge anatomy/detail into single dense sentences
+3. Prioritize ACTION and MOVEMENT over static description
+4. Lock expression with triple-reinforcement (3 synonymous constraints)
+5. End with anti-AI rendering cue (camera model + lens)
+
+### A-Roll Video Structure:
+- format, voice, setting (2-3 sentences), subject ("Same person as reference" + outfit confirmations), action (frame-by-frame choreography, ONE punctuating gesture), expression (sustained state, NOT arc), camera (handheld, micro-wobble), lip_sync (jaw behavior separate from expression), voiceover (EXACT script, NEVER modified), technical (ISO, no color grade)
+
+### B-Roll Video Structure:
+- subject_description (1 sentence), action (2-3 sentences temporal order), physical_micro_detail (frame traits as PHYSICAL not emotional), expression_lock (triple reinforcement), secondary_motion (what else moves), lighting_setting, camera_feel, negative_behaviors (4-5 things NOT done), skin_realism, anti_ai_cue ("Shot on Sony A7IV, 85mm lens")
+
+### C-Roll Video Structure:
+- Camera ALWAYS locked. ONE action only. Movement is anatomical (muscles VISIBLY FLEX). Expression triple-lock. State what stays constant THROUGHOUT.
+`;
+
+const CLONED_STORYBOARD_INSTRUCTION = `You are an expert video director specializing in recreating successful ad structures with photorealistic quality.
 
 For each scene:
 1. Look at the original scene's type, time, and visual description
-2. Recreate the same layout, camera angle, and visual elements
-3. Replace the original product/subject with the new product
-4. Replace the character with the new character image (or invent one fitting the audience)
-5. Ensure motion/action fits within the original scene's time duration`;
+2. Classify the scene as a ROLL TYPE: "aroll" (talking head/lip-sync), "broll" (product interaction, silent), or "croll" (concept/science visual)
+3. Recreate the same layout, camera angle, and visual elements
+4. Replace the original product/subject with the new product
+5. Replace the character with the new character image (or invent one fitting the audience)
+6. Generate image and video prompts following the PROMPT FRAMEWORK rules for that roll type
+7. Ensure motion/action fits within the original scene's time duration
 
-const ENHANCE_PROMPT_INSTRUCTION = `You are an expert creative director and prompt engineer.
-Take a simple scene description and expand it into a professional-grade prompt.
+${PROMPT_FRAMEWORK}
 
-For Image Prompt: rich paragraph with composition, camera angle, lighting, colors, mood.
-For Video Motion Prompt: concise action description with camera + subject movement.
+## META ADS AI STACK — VISUAL STRATEGY
+Andromeda's Entity ID system groups visually similar ads together. To create TRULY DIVERSE creatives
+(different embedding = different audience reach), the visual approach must reflect the selected creative strategy:
+
+- The EMOTIONAL TONE should drive lighting, color palette, and pacing:
+  Inspirational = bright, warm | Relatable = natural, casual | Urgent = high contrast, fast cuts
+  Calm = soft, muted | Humorous = vibrant, exaggerated | Educational = clean, infographic-style
+  Emotional = warm tones, close-ups
+
+- The STORYLINE TYPE should drive camera work and setting:
+  Founder Story = office/workshop setting | Day-in-the-Life = multiple real locations
+  Problem/Solution = split-screen or before/after contrast | Behind the Scenes = factory/lab setting
+  Testimonial = selfie/webcam framing | Unboxing = overhead/tabletop shot
+
+- Image prompts must include scene-appropriate lighting, composition, and mood that MATCHES the tone
+- Video prompts must describe motion that reinforces the emotional beat (e.g. urgent = fast movement)
+
+## CRITICAL OUTPUT RULES
+
+### imagePrompt (MUST be 400-800 words, rich detailed paragraph)
+- A-Roll: Start with "Hyperrealistic photography". Include: subject demographics, face structure (jawline, eyes), micro-expression with muscle detail ("left corner of mouth slightly raised"), 3+ named skin imperfections with locations ("real acne blemishes and freckles on cheeks and nose"), exact hair description with anti-pattern, outfit details, pose with energy descriptor and anti-pattern, exact hand + product grip (which fingers), product color/size/material/branding text/orientation, specific background with 3-5 named objects, practical lighting only (from objects IN the scene, name the practical and its color cast), secondary light source, shadow description, camera lens + aperture + grain + aspect ratio, and a negative prompt section with 8+ exclusions.
+- B-Roll: Include: subject ethnicity/age/build with weight estimate, face unique features (3-5 traits), expression (what IS and is NOT), eye direction, head angle, hair with style/texture/color/anti-pattern, skin tone + 5+ texture requirements (pores, oil sheen, razor bumps, stretch marks, ashiness), physique with key visual traits, clothing with how it interacts with physique, EVERY finger's state for each hand (which grip, which curl away), product exact dimensions + size comparison + material + branding + condition + orientation, per-gummy positions if applicable, setting with anti-pattern, lighting source/temperature/shadows/product light interaction, camera as phone (iPhone 15 Pro), depth of field, grain, color grading, framing, and 15+ items in what_to_avoid.
+- C-Roll: Include: concept summary + visual metaphor + hero element, subject demographics + pose + expression, anatomy layers with coverage percentage + primary/secondary/tertiary layers each named with descriptions and color palettes, ghost skin opacity range, product interaction if present, glow characteristics per tissue type (bone/muscle/cartilage/organ), outer aura, lighting with self-illumination percentage, camera format + DOF + focus point + grain + color treatment + framing, and 10+ what_to_avoid items.
+
+### videoPrompt (MUST be 800-2500 characters, structured and specific)
+- End with anti-AI cue ("Shot on Sony A7IV, 85mm lens" for B/C-Roll, "Shot on iPhone 15 Pro, f/1.8" for A-Roll)
+- Triple-lock expressions in every video prompt
+- A-Roll: Include format, setting (2-3 sentences), subject ("Same person as reference" + 3-4 outfit confirmations), action (frame-by-frame with ONE punctuating gesture), expression (sustained state), camera (handheld micro-wobble), lip_sync (jaw behavior + speech register), voiceover (EXACT script SACRED), technical (ISO, no color grade)
+- B-Roll: Include subject_description (1 sentence), action (2-3 sentences temporal), physical_micro_detail (PHYSICAL not emotional), expression_lock (triple), secondary_motion, lighting_setting, camera_feel, negative_behaviors (4-5), skin_realism, anti_ai_cue
+- C-Roll: Include camera_behavior (LOCKED), background, subject_anatomy (2-3 dense sentences), eye_treatment if visible, action_sequence (numbered steps), movement_constraints, expression_lock (triple), technical
+
+### rollType: MUST be one of "aroll", "broll", "croll"
+- For A-Roll scenes: voiceover is SACRED — never modify the script dialogue
+- For B-Roll scenes: character is SILENT. No speech, no mouth movement
+- For C-Roll scenes: camera is LOCKED. Describe anatomical/conceptual movement only`;
+
+const ENHANCE_PROMPT_INSTRUCTION = `You are an expert creative director and prompt engineer specializing in photorealistic UGC-style ad content.
+
+${PROMPT_FRAMEWORK}
+
+## YOUR TASK
+Take the existing scene description and enhance it into a professional-grade prompt following the roll-type framework above.
+
+**For Image Prompt enhancement:**
+- Identify the roll type from the scene context (A-Roll if dialogue present, B-Roll if product interaction without speech, C-Roll if concept/science)
+- A-Roll: Open with "Hyperrealistic photography". Add micro-expression detail, 3+ named skin imperfections, practical lighting, specific background objects, product branding text, camera specs (lens + aperture + grain), negative prompt section
+- B-Roll: Add exact hand/finger positions, product dimensions, 5+ skin realism markers, anti-selling expression, anti-pattern descriptions, phone camera specs
+- C-Roll: Add named anatomical structures, color per layer, ghost-skin opacity, glow characteristics, self-illumination
+- Always include universal negatives (no tattoos, no AI-smooth skin, no watermarks, etc.)
+
+**For Video Prompt enhancement:**
+- HARD LIMIT: 2,500 characters total
+- Compress: skip details the reference image carries, merge descriptions into dense sentences
+- Triple-lock expressions (3 synonymous constraints)
+- End with anti-AI cue ("Shot on Sony A7IV, 85mm lens, natural color grading" or "Shot on iPhone 15 Pro, portrait mode, f/1.8")
+- A-Roll: Include lip_sync instructions separate from expression, ONE punctuating gesture
+- B-Roll: Frame physical traits as physical not emotional, list 4-5 negative behaviors
+- C-Roll: Camera locked, one action only, state what stays constant throughout
 
 Return ONLY the enhanced prompt text, nothing else.`;
 
@@ -109,10 +294,10 @@ const ANALYSIS_SCHEMA = {
         type: "OBJECT" as const,
         properties: {
           scene_id: { type: "INTEGER" as const },
-          type: { type: "STRING" as const },
-          time: { type: "STRING" as const },
-          visual: { type: "STRING" as const },
-          speech: { type: "STRING" as const },
+          type: { type: "STRING" as const, description: "Marketing purpose + roll type, e.g. 'product (C-Roll)' or 'benefit (A-Roll)'" },
+          time: { type: "STRING" as const, description: "Precise timestamp range, e.g. '2.5s - 4.0s'" },
+          visual: { type: "STRING" as const, description: "Rich visual description: subject, camera, lighting, colors, motion, anatomical structures if applicable" },
+          speech: { type: "STRING" as const, description: "EXACT voiceover text and/or text overlays. Use 'VO: [speech] | TEXT: [overlay]' format" },
         },
         required: ["scene_id", "type", "time", "visual", "speech"] as const,
       },
@@ -128,8 +313,8 @@ export async function analyzeVideoFrames(
 ): Promise<VideoAnalysis> {
   const ai = getClient();
 
-  // Keep max 10 frames — evenly sampled across the video
-  const maxFrames = 10;
+  // Send up to 30 evenly-sampled frames for accurate scene detection
+  const maxFrames = 30;
   const sampled =
     frames.length <= maxFrames
       ? frames
@@ -137,9 +322,18 @@ export async function analyzeVideoFrames(
           frames[Math.floor((i / maxFrames) * frames.length)]
         );
 
+  // Calculate the timestamp of each sampled frame for Gemini
+  const frameTimestamps = sampled.map((_, i) => {
+    const frameIdx = frames.length <= maxFrames ? i : Math.floor((i / maxFrames) * frames.length);
+    return (frameIdx / Math.max(fps, 0.5)).toFixed(1);
+  });
+
   const parts: Part[] = [
     {
-      text: `Analyze these ${sampled.length} frames from a ${duration.toFixed(1)}-second video, captured at ${fps} FPS.`,
+      text: `Analyze these ${sampled.length} frames from a ${duration.toFixed(1)}-second video, captured at ${fps.toFixed(1)} FPS.
+Frame timestamps: ${frameTimestamps.map((t, i) => `Frame ${i + 1} = ${t}s`).join(", ")}.
+
+IMPORTANT: This is a video AD — scenes change rapidly (every 1-4 seconds). Cut scenes at every visual change. A 50-second ad should have 12-25+ scenes. Extract the COMPLETE voiceover/text for each scene.`,
     },
   ];
   for (const frame of sampled) {
@@ -167,13 +361,20 @@ export interface ScriptScene {
   direction: string;
 }
 
+export interface CreativeStrategy {
+  motivator?: string;
+  emotionalTone?: string;
+  storylineType?: string;
+}
+
 export async function generateClonedScript(
   analysis: VideoAnalysis,
   bigIdea: string,
   productImage: string,
   productInfo?: string,
   targetAudience?: string,
-  creatorImage?: string
+  creatorImage?: string,
+  strategy?: CreativeStrategy
 ): Promise<ScriptScene[]> {
   const ai = getClient();
 
@@ -185,6 +386,15 @@ export async function generateClonedScript(
     )
     .join("\n");
 
+  // Build creative strategy block
+  const strategyLines: string[] = [];
+  if (strategy?.motivator) strategyLines.push(`**PRIMARY MOTIVATOR:** ${strategy.motivator} — The hook and overall persuasion angle MUST use this motivator. Refer to the Motivator Framework in the system instructions for hook patterns.`);
+  if (strategy?.emotionalTone) strategyLines.push(`**EMOTIONAL TONE:** ${strategy.emotionalTone} — ALL scenes must maintain this tone consistently in language, energy, and word choice.`);
+  if (strategy?.storylineType) strategyLines.push(`**STORYLINE TYPE:** ${strategy.storylineType} — The narrative arc should follow this storyline structure. Adapt the original scene flow to fit.`);
+  const strategyBlock = strategyLines.length > 0
+    ? `\n\n## CREATIVE STRATEGY (apply these across the entire script)\n${strategyLines.join("\n")}`
+    : "";
+
   const promptText = `**Original Ad has ${analysis.sceneBreakdown.length} scenes. You MUST write exactly ${analysis.sceneBreakdown.length} scenes.**
 
 **Original Scene Breakdown:**
@@ -194,7 +404,7 @@ ${sceneList}
 
 **NEW Product Big Idea:** ${bigIdea}
 **NEW Product Info:** ${productInfo || "Not provided."}
-**NEW Target Audience:** ${targetAudience || "Not provided."}
+**NEW Target Audience:** ${targetAudience || "Not provided."}${strategyBlock}
 
 Write a complete ${analysis.sceneBreakdown.length}-scene script. Each scene needs 2-4 sentences of natural spoken dialogue.`;
 
@@ -259,11 +469,21 @@ export async function generateClonedStoryboard(
   productImage: string,
   productInfo?: string,
   targetAudience?: string,
-  creatorImage?: string
+  creatorImage?: string,
+  strategy?: CreativeStrategy
 ): Promise<StoryboardScene[]> {
   const ai = getClient();
 
-  const promptText = `**Original Ad Analysis:**\n${JSON.stringify(analysis, null, 2)}\n\n**New Script:**\n${script}\n\n**New Product Info:** ${productInfo || "Not provided."}\n**New Target Audience:** ${targetAudience || "Not provided."}`;
+  // Build creative strategy visual direction
+  const strategyLines: string[] = [];
+  if (strategy?.emotionalTone) strategyLines.push(`**EMOTIONAL TONE:** ${strategy.emotionalTone} — Drive lighting, color palette, and visual energy to match this tone. See system instructions for tone-to-visual mapping.`);
+  if (strategy?.storylineType) strategyLines.push(`**STORYLINE TYPE:** ${strategy.storylineType} — Use camera work and settings that match this storyline type. See system instructions for storyline-to-visual mapping.`);
+  if (strategy?.motivator) strategyLines.push(`**MOTIVATOR:** ${strategy.motivator} — The visual hook (scene 1) must visually reinforce this motivator.`);
+  const strategyBlock = strategyLines.length > 0
+    ? `\n\n## VISUAL STRATEGY (apply to all image/video prompts)\n${strategyLines.join("\n")}`
+    : "";
+
+  const promptText = `**Original Ad Analysis:**\n${JSON.stringify(analysis, null, 2)}\n\n**New Script:**\n${script}\n\n**New Product Info:** ${productInfo || "Not provided."}\n**New Target Audience:** ${targetAudience || "Not provided."}${strategyBlock}`;
 
   const parts: Part[] = [
     { text: promptText },
@@ -303,12 +523,14 @@ export async function generateClonedStoryboard(
               items: {
                 type: "OBJECT",
                 properties: {
+                  rollType: { type: "STRING", description: "One of: aroll, broll, croll" },
                   voiceoverScript: { type: "STRING" },
                   voiceoverGuide: { type: "STRING" },
                   imagePrompt: { type: "STRING" },
                   videoPrompt: { type: "STRING" },
                 },
                 required: [
+                  "rollType",
                   "voiceoverScript",
                   "voiceoverGuide",
                   "imagePrompt",
@@ -325,11 +547,15 @@ export async function generateClonedStoryboard(
     const result = JSON.parse(response.text!.trim());
     return result.scenes.map(
       (s: {
+        rollType?: string;
         voiceoverScript: string;
         voiceoverGuide: string;
         imagePrompt: string;
         videoPrompt: string;
-      }) => createDefaultScene(s)
+      }) => createDefaultScene({
+        ...s,
+        rollType: (["aroll", "broll", "croll"].includes(s.rollType || "") ? s.rollType : undefined) as RollType | undefined,
+      })
     );
   });
 }

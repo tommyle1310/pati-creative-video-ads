@@ -49,6 +49,10 @@ interface StudioState {
   bigIdea: string;
   productInfo: string;
   targetAudience: string;
+  // Creative Strategy (Meta Ads AI Stack)
+  motivator: string;
+  emotionalTone: string;
+  storylineType: string;
   // Step 4
   scriptScenes: ScriptScene[];
   isGeneratingScript: boolean;
@@ -99,6 +103,9 @@ const initialState: StudioState = {
   bigIdea: "",
   productInfo: "",
   targetAudience: "",
+  motivator: "",
+  emotionalTone: "",
+  storylineType: "",
   scriptScenes: [],
   isGeneratingScript: false,
   scenes: [],
@@ -192,6 +199,41 @@ const STEPS = [
 ];
 
 const VOICES = ["Kore", "Puck", "Charon", "Fenrir", "Zephyr"];
+
+// ── Creative Strategy Constants (from Meta Ads AI Stack) ─────
+
+const MOTIVATORS = [
+  { value: "pain-point", label: "Pain Point", desc: "Address a frustration or problem", hook: "Tired of [problem]? / Stop wasting [time/money] on [bad solution]" },
+  { value: "aspiration", label: "Pleasure / Aspiration", desc: "Promise a desired outcome", hook: "Imagine waking up to [desired outcome] / Finally feel [desired emotion]" },
+  { value: "social-proof", label: "Social Proof", desc: "Leverage others' validation", hook: "[Number] people can't be wrong / Why everyone's switching to [product]" },
+  { value: "curiosity", label: "Curiosity", desc: "Create information gap", hook: "The secret [industry] doesn't want you to know / This changes everything about [category]" },
+  { value: "urgency", label: "Fear / Urgency", desc: "Drive immediate action", hook: "Last chance to [benefit] / [Time limit] left to get [offer]" },
+  { value: "identity", label: "Identity", desc: "Speak to who they are", hook: "For [persona] who [behavior] / Not for everyone. Just for [identity]" },
+  { value: "feature-led", label: "Feature-Led", desc: "Highlight specific attributes", hook: "Made for [specific need] / The only [product] with [feature]" },
+  { value: "problem-solution", label: "Problem / Solution", desc: "Classic before/after", hook: "Tired of X? Here's how to fix it / Before vs. After" },
+  { value: "authority", label: "Authority / Expert", desc: "Leverage credibility", hook: "Doctor-recommended / Expert-approved [product]" },
+  { value: "comparison", label: "Comparison", desc: "Position against alternatives", hook: "Why this beats your current solution / [Product] vs. the rest" },
+] as const;
+
+const EMOTIONAL_TONES = [
+  { value: "inspirational", label: "Inspirational", desc: "Aspiration, transformation" },
+  { value: "relatable", label: "Relatable / Problem-first", desc: "Pain point acknowledgment" },
+  { value: "urgent", label: "Urgent / Limited-time", desc: "Promotions, scarcity" },
+  { value: "calm", label: "Calm / Reassuring", desc: "Trust-building, premium" },
+  { value: "humorous", label: "Humorous / Satirical", desc: "Pattern interrupt, shareability" },
+  { value: "educational", label: "Educational", desc: "Complex products, consideration" },
+  { value: "emotional", label: "Emotional / Heartfelt", desc: "Gift-giving, meaningful purchases" },
+] as const;
+
+const STORYLINE_TYPES = [
+  { value: "founder-story", label: "Founder Origin Story", desc: "Why the brand/product was created" },
+  { value: "day-in-the-life", label: "Day-in-the-Life", desc: "Product integrated into daily routine" },
+  { value: "problem-solution", label: "Problem / Solution", desc: "Before state → After state" },
+  { value: "things-you-didnt-know", label: "Things You Didn't Know", desc: "Educational, surprising facts" },
+  { value: "behind-the-scenes", label: "Behind the Scenes", desc: "How it's made, company culture" },
+  { value: "testimonial", label: "Testimonial / Review", desc: "Customer sharing experience" },
+  { value: "unboxing", label: "Unboxing / First Impression", desc: "Discovery moment" },
+] as const;
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -369,6 +411,9 @@ export default function StudioPage() {
           productInfo: s.productInfo,
           targetAudience: s.targetAudience,
           creatorImage: s.creatorImage,
+          motivator: s.motivator,
+          emotionalTone: s.emotionalTone,
+          storylineType: s.storylineType,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
@@ -379,7 +424,7 @@ export default function StudioPage() {
     } finally {
       dispatch({ type: "SET_GENERATING_SCRIPT", v: false });
     }
-  }, [s.analysis, s.bigIdea, s.productImage, s.productInfo, s.targetAudience, s.creatorImage]);
+  }, [s.analysis, s.bigIdea, s.productImage, s.productInfo, s.targetAudience, s.creatorImage, s.motivator, s.emotionalTone, s.storylineType]);
 
   // ── Step 5: Generate storyboard ──
 
@@ -398,6 +443,9 @@ export default function StudioPage() {
           productInfo: s.productInfo,
           targetAudience: s.targetAudience,
           creatorImage: s.creatorImage,
+          motivator: s.motivator,
+          emotionalTone: s.emotionalTone,
+          storylineType: s.storylineType,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
@@ -408,7 +456,7 @@ export default function StudioPage() {
     } finally {
       dispatch({ type: "SET_GENERATING_STORYBOARD", v: false });
     }
-  }, [s.analysis, s.scriptScenes, s.productImage, s.productInfo, s.targetAudience, s.creatorImage]);
+  }, [s.analysis, s.scriptScenes, s.productImage, s.productInfo, s.targetAudience, s.creatorImage, s.motivator, s.emotionalTone, s.storylineType]);
 
   // ── Step 6: Upload references + generate assets ──
 
@@ -453,6 +501,10 @@ export default function StudioPage() {
         const { productUrl, creatorUrl } = await ensureVidtoryUploads();
 
         let prompt = scene.imagePrompt;
+        // Prepend realism anchor for A-Roll scenes if not already present
+        if (scene.rollType === "aroll" && !prompt.toLowerCase().startsWith("hyperrealistic")) {
+          prompt = `Hyperrealistic photography. ${prompt}`;
+        }
         if (scene.imageFocusObject) prompt = `Focus on: ${scene.imageFocusObject}. ${prompt}`;
         if (scene.imageCameraAngle) prompt = `${scene.imageCameraAngle} shot. ${prompt}`;
 
@@ -515,6 +567,13 @@ export default function StudioPage() {
           prompt += `\nDialogue in English: "${scene.voiceoverScript}"`;
         }
         prompt += "\n\nNo Music Background";
+        // Append anti-AI rendering cue based on roll type
+        const rollType = scene.rollType || "broll";
+        if (rollType === "aroll") {
+          if (!prompt.includes("Shot on")) prompt += "\nShot on iPhone 15 Pro, portrait mode, f/1.8. 1600 ISO grain. No color grade. Unfiltered.";
+        } else {
+          if (!prompt.includes("Shot on")) prompt += "\nPhotorealistic, shot on Sony A7IV, 85mm lens, natural color grading.";
+        }
 
         const res = await fetch("/api/studio/generate-video", {
           method: "POST",
@@ -660,7 +719,7 @@ export default function StudioPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            projectContext: `Product: ${s.productInfo}\nAudience: ${s.targetAudience}\nBig Idea: ${s.bigIdea}`,
+            projectContext: `Product: ${s.productInfo}\nAudience: ${s.targetAudience}\nBig Idea: ${s.bigIdea}${s.motivator ? `\nMotivator: ${s.motivator}` : ""}${s.emotionalTone ? `\nEmotional Tone: ${s.emotionalTone}` : ""}${s.storylineType ? `\nStoryline: ${s.storylineType}` : ""}`,
             scene,
             promptType,
             productImage: s.productImage,
@@ -893,7 +952,7 @@ export default function StudioPage() {
                   {s.frames.length} frames extracted
                 </p>
                 <div className="flex gap-1 overflow-x-auto pb-2">
-                  {s.frames.slice(0, 20).map((f, i) => (
+                  {s.frames.slice(0, 40).map((f, i) => (
                     <img
                       key={i}
                       src={f}
@@ -901,9 +960,9 @@ export default function StudioPage() {
                       className="h-16 rounded border border-border shrink-0"
                     />
                   ))}
-                  {s.frames.length > 20 && (
+                  {s.frames.length > 40 && (
                     <div className="h-16 w-16 flex items-center justify-center bg-muted rounded text-xs text-muted-foreground shrink-0">
-                      +{s.frames.length - 20}
+                      +{s.frames.length - 40}
                     </div>
                   )}
                 </div>
@@ -923,22 +982,31 @@ export default function StudioPage() {
                   <h3 className="text-sm font-medium mb-2">
                     Scene Breakdown ({s.analysis.sceneBreakdown.length} scenes)
                   </h3>
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-[600px] overflow-y-auto">
                     {s.analysis.sceneBreakdown.map((scene) => (
                       <div
                         key={scene.scene_id}
-                        className="bg-muted/30 rounded-md p-3 grid grid-cols-[80px_100px_1fr_1fr] gap-3 text-sm"
+                        className="bg-muted/30 rounded-md p-3 text-sm"
                       >
-                        <span className="text-muted-foreground font-mono">
-                          {scene.time}
-                        </span>
-                        <span className="capitalize font-medium text-emerald-400">
-                          {scene.type}
-                        </span>
-                        <span className="text-muted-foreground">{scene.visual}</span>
-                        <span className="italic text-muted-foreground">
-                          &ldquo;{scene.speech}&rdquo;
-                        </span>
+                        <div className="flex items-center gap-3 mb-1.5">
+                          <span className="text-muted-foreground font-mono text-xs shrink-0 w-[90px]">
+                            {scene.time}
+                          </span>
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded shrink-0 ${
+                            scene.type.toLowerCase().includes("a-roll") ? "bg-blue-500/20 text-blue-400" :
+                            scene.type.toLowerCase().includes("b-roll") ? "bg-amber-500/20 text-amber-400" :
+                            scene.type.toLowerCase().includes("c-roll") ? "bg-purple-500/20 text-purple-400" :
+                            "bg-emerald-500/20 text-emerald-400"
+                          }`}>
+                            {scene.type}
+                          </span>
+                        </div>
+                        <p className="text-muted-foreground text-xs leading-relaxed mb-1">{scene.visual}</p>
+                        {scene.speech && scene.speech !== "None" && (
+                          <p className="italic text-xs text-muted-foreground/70 border-l-2 border-emerald-500/30 pl-2">
+                            {scene.speech}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1069,6 +1137,118 @@ export default function StudioPage() {
                 />
               </div>
             </div>
+
+            {/* Creative Strategy — Meta Ads AI Stack Framework */}
+            <div className="border-t border-border pt-6 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  Creative Strategy
+                  <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                    Meta Ads AI Stack
+                  </span>
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Different motivators reach different audiences via Andromeda&apos;s embedding system. &quot;Creative is the new targeting.&quot;
+                </p>
+              </div>
+
+              {/* Motivator */}
+              <div>
+                <label className="text-sm font-medium">
+                  Primary Motivator
+                </label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  The psychological driver that makes someone take action
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                  {MOTIVATORS.map((m) => (
+                    <button
+                      key={m.value}
+                      onClick={() =>
+                        dispatch({
+                          type: "SET_FIELD",
+                          field: "motivator",
+                          value: s.motivator === m.value ? "" : m.value,
+                        })
+                      }
+                      className={`text-left px-3 py-2 rounded-md border text-xs transition-colors ${
+                        s.motivator === m.value
+                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
+                          : "border-border hover:border-muted-foreground"
+                      }`}
+                    >
+                      <span className="font-medium block">{m.label}</span>
+                      <span className="text-muted-foreground block mt-0.5 leading-tight">
+                        {m.desc}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {s.motivator && (
+                  <div className="mt-2 bg-muted/30 rounded px-3 py-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Hook templates: </span>
+                    {MOTIVATORS.find((m) => m.value === s.motivator)?.hook}
+                  </div>
+                )}
+              </div>
+
+              {/* Emotional Tone */}
+              <div>
+                <label className="text-sm font-medium">
+                  Emotional Tone
+                </label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {EMOTIONAL_TONES.map((t) => (
+                    <button
+                      key={t.value}
+                      onClick={() =>
+                        dispatch({
+                          type: "SET_FIELD",
+                          field: "emotionalTone",
+                          value: s.emotionalTone === t.value ? "" : t.value,
+                        })
+                      }
+                      className={`px-3 py-1.5 rounded-md border text-xs transition-colors ${
+                        s.emotionalTone === t.value
+                          ? "border-blue-500 bg-blue-500/10 text-blue-300"
+                          : "border-border hover:border-muted-foreground"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Storyline Type */}
+              <div>
+                <label className="text-sm font-medium">
+                  Storyline Type
+                </label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {STORYLINE_TYPES.map((st) => (
+                    <button
+                      key={st.value}
+                      onClick={() =>
+                        dispatch({
+                          type: "SET_FIELD",
+                          field: "storylineType",
+                          value: s.storylineType === st.value ? "" : st.value,
+                        })
+                      }
+                      className={`px-3 py-1.5 rounded-md border text-xs transition-colors ${
+                        s.storylineType === st.value
+                          ? "border-purple-500 bg-purple-500/10 text-purple-300"
+                          : "border-border hover:border-muted-foreground"
+                      }`}
+                    >
+                      <span className="font-medium">{st.label}</span>
+                      <span className="text-muted-foreground ml-1">— {st.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1106,6 +1286,27 @@ export default function StudioPage() {
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Creative Strategy badges */}
+            {(s.motivator || s.emotionalTone || s.storylineType) && (
+              <div className="flex flex-wrap gap-2">
+                {s.motivator && (
+                  <span className="text-xs px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-md">
+                    Motivator: {MOTIVATORS.find((m) => m.value === s.motivator)?.label}
+                  </span>
+                )}
+                {s.emotionalTone && (
+                  <span className="text-xs px-2 py-1 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-md">
+                    Tone: {EMOTIONAL_TONES.find((t) => t.value === s.emotionalTone)?.label}
+                  </span>
+                )}
+                {s.storylineType && (
+                  <span className="text-xs px-2 py-1 bg-purple-500/10 border border-purple-500/30 text-purple-400 rounded-md">
+                    Storyline: {STORYLINE_TYPES.find((st) => st.value === s.storylineType)?.label}
+                  </span>
+                )}
               </div>
             )}
 
@@ -1197,9 +1398,20 @@ export default function StudioPage() {
                   className="bg-muted/20 border border-border rounded-lg p-4 space-y-3"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-emerald-400">
-                      Scene {i + 1}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-emerald-400">
+                        Scene {i + 1}
+                      </span>
+                      {scene.rollType && (
+                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                          scene.rollType === "aroll" ? "bg-blue-500/20 text-blue-400" :
+                          scene.rollType === "broll" ? "bg-amber-500/20 text-amber-400" :
+                          "bg-purple-500/20 text-purple-400"
+                        }`}>
+                          {scene.rollType === "aroll" ? "A-ROLL" : scene.rollType === "broll" ? "B-ROLL" : "C-ROLL"}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex gap-1">
                       <button
                         onClick={() => handleEnhancePrompt(scene.id, "image")}
@@ -1354,6 +1566,15 @@ export default function StudioPage() {
                     <span className="text-sm font-medium text-emerald-400">
                       Scene {i + 1}
                     </span>
+                    {scene.rollType && (
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                        scene.rollType === "aroll" ? "bg-blue-500/20 text-blue-400" :
+                        scene.rollType === "broll" ? "bg-amber-500/20 text-amber-400" :
+                        "bg-purple-500/20 text-purple-400"
+                      }`}>
+                        {scene.rollType === "aroll" ? "A-ROLL" : scene.rollType === "broll" ? "B-ROLL" : "C-ROLL"}
+                      </span>
+                    )}
                     <span className="text-xs text-muted-foreground truncate">
                       {scene.voiceoverScript.slice(0, 60)}...
                     </span>

@@ -59,25 +59,21 @@ async function getFormat(videoPath: string): Promise<string> {
 function getTimestamps(duration: number): number[] {
   if (duration <= 0) return [0];
 
-  // For studio: extract more frames for better scene analysis
-  // ~1 frame per 3 seconds, plus key structural points
-  const timestamps = new Set<number>();
+  // Video ads change visuals frequently — extract ~2 frames/second
+  // for accurate scene-cut detection. Cap at 120 frames.
+  const interval = 0.5; // every 0.5 seconds
+  const maxFrames = 120;
+  const timestamps: number[] = [];
 
-  // Key structural points (hook, early, mid, CTA)
-  timestamps.add(0);
-  if (duration > 3) timestamps.add(2);
-  if (duration > 7) timestamps.add(5);
-  if (duration > 15) timestamps.add(Math.floor(duration * 0.25));
-  if (duration > 10) timestamps.add(Math.floor(duration * 0.5));
-  if (duration > 20) timestamps.add(Math.floor(duration * 0.75));
-  if (duration > 10) timestamps.add(Math.max(Math.floor(duration - 3), 6));
-
-  // Fill in ~every 3s for coverage
-  for (let t = 0; t < duration - 1; t += 3) {
-    timestamps.add(Math.floor(t));
+  for (let t = 0; t < duration; t += interval) {
+    timestamps.push(Math.round(t * 100) / 100); // avoid float drift
+  }
+  // Always include the last moment
+  if (timestamps.length === 0 || timestamps[timestamps.length - 1] < duration - 0.3) {
+    timestamps.push(Math.max(0, duration - 0.2));
   }
 
-  return [...timestamps].filter((t) => t < duration).sort((a, b) => a - b).slice(0, 15);
+  return timestamps.slice(0, maxFrames);
 }
 
 async function extractFrames(
@@ -86,24 +82,50 @@ async function extractFrames(
   duration: number
 ): Promise<string[]> {
   const timestamps = getTimestamps(duration);
-  const framePaths: string[] = [];
 
-  for (const ts of timestamps) {
-    const framePath = path.join(jobDir, `frame_${ts}s.jpg`);
-    try {
-      await run("ffmpeg", [
-        "-ss", String(ts), "-i", videoPath,
-        "-vframes", "1", "-q:v", "4", "-y", framePath,
-      ], 15000);
-      if (fs.existsSync(framePath) && fs.statSync(framePath).size > 500) {
-        framePaths.push(framePath);
+  // Use a single FFmpeg pass with fps filter for efficiency (2 fps)
+  const outputPattern = path.join(jobDir, "frame_%04d.jpg");
+  try {
+    await run("ffmpeg", [
+      "-i", videoPath,
+      "-vf", "fps=2",
+      "-q:v", "4",
+      "-y", outputPattern,
+    ], 120000); // 2 min timeout for longer videos
+  } catch {
+    // Fallback: extract per-timestamp if fps filter fails
+    const framePaths: string[] = [];
+    for (const ts of timestamps.slice(0, 60)) {
+      const framePath = path.join(jobDir, `frame_${ts}s.jpg`);
+      try {
+        await run("ffmpeg", [
+          "-ss", String(ts), "-i", videoPath,
+          "-vframes", "1", "-q:v", "4", "-y", framePath,
+        ], 15000);
+        if (fs.existsSync(framePath) && fs.statSync(framePath).size > 500) {
+          framePaths.push(framePath);
+        }
+      } catch {
+        // skip this timestamp
       }
-    } catch {
-      // skip this timestamp
+    }
+    return framePaths;
+  }
+
+  // Collect all extracted frames in order
+  const framePaths: string[] = [];
+  const files = fs.readdirSync(jobDir)
+    .filter((f) => f.startsWith("frame_") && f.endsWith(".jpg"))
+    .sort();
+  for (const file of files) {
+    const fp = path.join(jobDir, file);
+    if (fs.statSync(fp).size > 500) {
+      framePaths.push(fp);
     }
   }
 
-  return framePaths;
+  // Cap at 120 frames
+  return framePaths.slice(0, 120);
 }
 
 async function downloadVideo(url: string, outputPath: string): Promise<void> {

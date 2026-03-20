@@ -8,8 +8,11 @@ export interface VideoData {
   upscaledUrl?: string;
 }
 
+export type RollType = "aroll" | "broll" | "croll";
+
 export interface StoryboardScene {
   id: string;
+  rollType?: RollType;
   voiceoverScript: string;
   voiceoverGuide: string;
   imagePrompt: string;
@@ -123,6 +126,7 @@ export interface JobStatusResponse {
 // ── Helper ──
 
 export function createDefaultScene(partial: {
+  rollType?: RollType;
   voiceoverScript: string;
   voiceoverGuide: string;
   imagePrompt: string;

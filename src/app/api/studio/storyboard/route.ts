@@ -3,7 +3,7 @@ import { generateClonedStoryboard } from "@/lib/studio/gemini";
 
 export async function POST(req: NextRequest) {
   try {
-    const { analysis, script, productImage, productInfo, targetAudience, creatorImage } =
+    const { analysis, script, productImage, productInfo, targetAudience, creatorImage, motivator, emotionalTone, storylineType } =
       await req.json();
 
     if (!analysis || !script || !productImage) {
@@ -11,7 +11,8 @@ export async function POST(req: NextRequest) {
     }
 
     const scenes = await generateClonedStoryboard(
-      analysis, script, productImage, productInfo, targetAudience, creatorImage
+      analysis, script, productImage, productInfo, targetAudience, creatorImage,
+      { motivator, emotionalTone, storylineType }
     );
     return NextResponse.json({ scenes });
   } catch (e: unknown) {
