@@ -67,10 +67,14 @@ model AdRecord {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  // Relations
+  savedAds        SavedAd[]
+
   @@index([region])
   @@index([brand])
   @@index([adScore])
   @@index([status])
+  @@index([pageName])
 }
 
 model CompetitorScore {
@@ -124,4 +128,43 @@ model CrawlJob {
   competitors     CompetitorScore[]
 
   @@index([status])
+}
+
+model Board {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  color       String    @default("#7F77DD")
+  icon        String    @default("bookmark")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  savedAds    SavedAd[]
+}
+
+model SavedAd {
+  id       String   @id @default(cuid())
+  boardId  String
+  board    Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  adId     String
+  ad       AdRecord @relation(fields: [adId], references: [id], onDelete: Cascade)
+  notes    String?  @db.Text
+  savedAt  DateTime @default(now())
+
+  @@unique([boardId, adId])
+  @@index([boardId])
+  @@index([adId])
+}
+
+model Brief {
+  id            String   @id @default(cuid())
+  targetProduct String
+  targetMarket  String
+  basedOnAdIds  String[]
+  briefJson     Json
+  userContext    String?  @db.Text
+  isArchived    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([targetProduct])
+  @@index([isArchived])
 }

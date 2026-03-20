@@ -33,7 +33,12 @@
       "Bash(python -c \":*)",
       "Bash(ls d:/jobs/pati/creative-project/.tmp/*.json)",
       "WebFetch(domain:motionapp.com)",
-      "Bash(winget install:*)"
+      "Bash(winget install:*)",
+      "Bash(npm install:*)",
+      "Bash(ls d:/jobs/pati/creative-project/postcss.config.*)",
+      "Bash(npm ls:*)",
+      "Bash(ls d:/jobs/pati/creative-project/next.config.*)",
+      "Bash(npm uninstall:*)"
     ]
   }
 }

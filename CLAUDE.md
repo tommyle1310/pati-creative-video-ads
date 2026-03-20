@@ -94,6 +94,47 @@ interface CrawlJob {
 }
 ```
 
+### Board
+```typescript
+interface Board {
+  id: string;
+  name: string;           // e.g. "Disgust Hooks", "US Market Winners"
+  description?: string;
+  color: string;          // hex, default "#7F77DD"
+  icon: string;           // lucide icon name, default "bookmark"
+  createdAt: string;
+  updatedAt: string;
+  savedAds: SavedAd[];
+}
+```
+
+### SavedAd
+```typescript
+interface SavedAd {
+  id: string;
+  boardId: string;
+  adId: string;           // references AdRecord.id
+  notes?: string;         // user notes (markdown)
+  savedAt: string;
+  // Unique constraint: [boardId, adId]
+  // Cascade: deletes when Board OR AdRecord is deleted
+}
+```
+
+### Brief
+```typescript
+interface Brief {
+  id: string;
+  targetProduct: string;  // "FusiForce" | "MenoMate" | "FloraFresh" | "Shilajit" | custom
+  targetMarket: string;   // "US" | "UK" | "AU"
+  basedOnAdIds: string[]; // AdRecord IDs (NOT a relation — briefs persist after ad deletion)
+  briefJson: object;      // Full GeneratedBrief JSON
+  userContext?: string;    // Optional additional context
+  isArchived: boolean;     // default false
+  createdAt: string;
+}
+```
+
 ## Pipeline Architecture (v2 — Bulk-First)
 
 ```

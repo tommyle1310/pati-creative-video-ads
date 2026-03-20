@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import styles from "./AdExplorer.module.css";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import VideoPlayerModal from "./VideoPlayerModal";
+import SaveToBoardDropdown from "./SaveToBoardDropdown";
+import BriefGenerateModal from "./BriefGenerateModal";
 
 interface AdRecord {
   id: string;
@@ -50,6 +58,19 @@ interface FilterOptions {
   brands: string[];
 }
 
+const PATTERN_CLASSES: Record<string, string> = {
+  "Problem-First UGC": "bg-violet-600",
+  "Result-First Scroll Stop": "bg-amber-500",
+  "Curiosity Gap": "bg-cyan-600",
+  "Social Proof Cascade": "bg-pink-500",
+  "Comparison/Versus": "bg-emerald-600",
+  "Authority Demo": "bg-blue-600",
+  Unclassifiable: "bg-slate-500",
+};
+
+const selectClass =
+  "h-9 rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent [&>option]:bg-[#1a1a2e] [&>option]:text-white";
+
 function FieldBlock({ label, content }: { label: string; content: string }) {
   const [open, setOpen] = useState(false);
   if (!content) return null;
@@ -57,23 +78,35 @@ function FieldBlock({ label, content }: { label: string; content: string }) {
   const isLong = content.length > 200;
 
   return (
-    <div className={styles.fieldBlock}>
-      <button className={styles.fieldLabel} onClick={() => setOpen(!open)}>
-        <span>{label}</span>
-        {isLong && <span className={styles.chevron}>{open ? "▾" : "▸"}</span>}
+    <div className="border-t border-white/5 pt-3 mt-3 first:mt-0 first:pt-0 first:border-0">
+      <button
+        className="flex w-full items-center justify-between text-left group mb-1"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="text-xs font-semibold uppercase tracking-wider text-violet-400 group-hover:text-violet-300 transition-colors">
+          {label}
+        </span>
+        {isLong && (
+          <span className="text-gray-500 text-xs ml-2 flex-shrink-0">
+            {open ? "▾" : "▸"}
+          </span>
+        )}
       </button>
-      <div className={styles.fieldContent}>
+      <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">
         {open || !isLong ? content : `${preview}...`}
-      </div>
+      </p>
     </div>
   );
 }
 
 export default function AdExplorer() {
+  const router = useRouter();
   const [ads, setAds] = useState<AdRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [briefModal, setBriefModal] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
     regions: [],
     patterns: [],
@@ -91,33 +124,51 @@ export default function AdExplorer() {
   });
   const [page, setPage] = useState(0);
   const pageSize = 20;
+  const [videoModal, setVideoModal] = useState<{
+    url: string;
+    title: string;
+    format?: string | null;
+    meta?: {
+      brand?: string;
+      market?: string;
+      adScore?: number;
+      longevityDays?: number;
+      hookType?: string;
+    };
+  } | null>(null);
 
-  const fetchAds = useCallback(async (pageNum: number = 0) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (filters.region) params.set("region", filters.region);
-      if (filters.brand) params.set("brand", filters.brand);
-      if (filters.creativePattern) params.set("creativePattern", filters.creativePattern);
-      if (filters.minLongevity) params.set("minLongevity", filters.minLongevity);
-      if (filters.minIterations) params.set("minIterations", filters.minIterations);
-      if (filters.minScore) params.set("minScore", filters.minScore);
-      params.set("sort", filters.sort);
-      params.set("order", filters.order);
-      params.set("limit", String(pageSize));
-      params.set("offset", String(pageNum * pageSize));
+  const fetchAds = useCallback(
+    async (pageNum: number = 0) => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (filters.region) params.set("region", filters.region);
+        if (filters.brand) params.set("brand", filters.brand);
+        if (filters.creativePattern)
+          params.set("creativePattern", filters.creativePattern);
+        if (filters.minLongevity)
+          params.set("minLongevity", filters.minLongevity);
+        if (filters.minIterations)
+          params.set("minIterations", filters.minIterations);
+        if (filters.minScore) params.set("minScore", filters.minScore);
+        params.set("sort", filters.sort);
+        params.set("order", filters.order);
+        params.set("limit", String(pageSize));
+        params.set("offset", String(pageNum * pageSize));
 
-      const res = await fetch(`/api/ads?${params}`);
-      const data = await res.json();
-      setAds(data.ads || []);
-      setTotal(data.total || 0);
-      if (data.filters) setFilterOptions(data.filters);
-    } catch {
-      setAds([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [filters]);
+        const res = await fetch(`/api/ads?${params}`);
+        const data = await res.json();
+        setAds(data.ads || []);
+        setTotal(data.total || 0);
+        if (data.filters) setFilterOptions(data.filters);
+      } catch {
+        setAds([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [filters]
+  );
 
   // Load on mount
   useEffect(() => {
@@ -138,89 +189,117 @@ export default function AdExplorer() {
     setFilters((prev) => ({ ...prev, [key]: val }));
   };
 
-  const totalPages = Math.ceil(total / pageSize);
-
-  const patternColors: Record<string, string> = {
-    "Problem-First UGC": "#7c3aed",
-    "Result-First Scroll Stop": "#f59e0b",
-    "Curiosity Gap": "#0891b2",
-    "Social Proof Cascade": "#ec4899",
-    "Comparison/Versus": "#059669",
-    "Authority Demo": "#0563c1",
-    Unclassifiable: "#64748b",
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleCompare = () => {
+    const ids = Array.from(selectedIds).slice(0, 3);
+    router.push(`/compare?ids=${ids.join(",")}`);
+  };
+
+  const totalPages = Math.ceil(total / pageSize);
+
   return (
-    <div>
-      {/* Filter Controls */}
-      <div className={styles.filterBar}>
-        <div className={styles.filterRow}>
-          <div className={styles.filterGroup}>
-            <label className={styles.filterGroupLabel}>Market</label>
+    <div className="space-y-4">
+      {/* Filter Bar */}
+      <Card className="p-4 bg-[#1a1a2e] border-white/10">
+        <div className="flex flex-wrap gap-4">
+          {/* Market */}
+          <div className="flex flex-col gap-1.5 min-w-[100px]">
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              Market
+            </label>
             <select
               value={filters.region}
               onChange={(e) => updateFilter("region", e.target.value)}
-              className={styles.select}
+              className={selectClass}
             >
               <option value="">All</option>
               {filterOptions.regions.map((r) => (
-                <option key={r} value={r}>{r}</option>
+                <option key={r} value={r}>
+                  {r}
+                </option>
               ))}
             </select>
           </div>
 
-          <div className={styles.filterGroup}>
-            <label className={styles.filterGroupLabel}>Pattern</label>
+          {/* Pattern */}
+          <div className="flex flex-col gap-1.5 min-w-[180px]">
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              Pattern
+            </label>
             <select
               value={filters.creativePattern}
               onChange={(e) => updateFilter("creativePattern", e.target.value)}
-              className={styles.select}
+              className={selectClass}
             >
               <option value="">All</option>
               {filterOptions.patterns.map((p) => (
-                <option key={p} value={p}>{p}</option>
+                <option key={p} value={p}>
+                  {p}
+                </option>
               ))}
             </select>
           </div>
 
-          <div className={styles.filterGroup}>
-            <label className={styles.filterGroupLabel}>Brand</label>
-            <input
+          {/* Brand */}
+          <div className="flex flex-col gap-1.5 min-w-[160px]">
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              Brand
+            </label>
+            <Input
               type="text"
               value={filters.brand}
               onChange={(e) => updateFilter("brand", e.target.value)}
               placeholder="Search brand..."
-              className={styles.input}
+              className="h-9 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus-visible:ring-violet-500"
             />
           </div>
 
-          <div className={styles.filterGroup}>
-            <label className={styles.filterGroupLabel}>Min Longevity</label>
-            <input
+          {/* Min Longevity */}
+          <div className="flex flex-col gap-1.5 w-[100px]">
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              Min Longevity
+            </label>
+            <Input
               type="number"
               value={filters.minLongevity}
               onChange={(e) => updateFilter("minLongevity", e.target.value)}
               placeholder="0"
               min="0"
-              className={styles.inputSmall}
+              className="h-9 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus-visible:ring-violet-500"
             />
           </div>
 
-          <div className={styles.filterGroup}>
-            <label className={styles.filterGroupLabel}>Min Iterations</label>
-            <input
+          {/* Min Iterations */}
+          <div className="flex flex-col gap-1.5 w-[100px]">
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              Min Iterations
+            </label>
+            <Input
               type="number"
               value={filters.minIterations}
               onChange={(e) => updateFilter("minIterations", e.target.value)}
               placeholder="0"
               min="0"
-              className={styles.inputSmall}
+              className="h-9 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus-visible:ring-violet-500"
             />
           </div>
 
-          <div className={styles.filterGroup}>
-            <label className={styles.filterGroupLabel}>Min Score</label>
-            <input
+          {/* Min Score */}
+          <div className="flex flex-col gap-1.5 w-[90px]">
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              Min Score
+            </label>
+            <Input
               type="number"
               value={filters.minScore}
               onChange={(e) => updateFilter("minScore", e.target.value)}
@@ -228,18 +307,19 @@ export default function AdExplorer() {
               min="0"
               max="10"
               step="0.5"
-              className={styles.inputSmall}
+              className="h-9 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus-visible:ring-violet-500"
             />
           </div>
-        </div>
 
-        <div className={styles.filterRow}>
-          <div className={styles.filterGroup}>
-            <label className={styles.filterGroupLabel}>Sort By</label>
+          {/* Sort By */}
+          <div className="flex flex-col gap-1.5 min-w-[130px]">
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              Sort By
+            </label>
             <select
               value={filters.sort}
               onChange={(e) => updateFilter("sort", e.target.value)}
-              className={styles.select}
+              className={selectClass}
             >
               <option value="adScore">AdScore</option>
               <option value="longevityDays">Longevity</option>
@@ -249,74 +329,161 @@ export default function AdExplorer() {
             </select>
           </div>
 
-          <div className={styles.filterGroup}>
-            <label className={styles.filterGroupLabel}>Order</label>
+          {/* Order */}
+          <div className="flex flex-col gap-1.5 min-w-[130px]">
+            <label className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+              Order
+            </label>
             <select
               value={filters.order}
               onChange={(e) => updateFilter("order", e.target.value)}
-              className={styles.select}
+              className={selectClass}
             >
               <option value="desc">Highest First</option>
               <option value="asc">Lowest First</option>
             </select>
           </div>
 
-          <button onClick={handleSearch} disabled={loading} className={styles.searchBtn}>
-            {loading ? "Loading..." : `Search (${total} results)`}
-          </button>
+          {/* Search Button — self-align to bottom */}
+          <div className="flex flex-col justify-end">
+            <Button
+              onClick={handleSearch}
+              disabled={loading}
+              className="h-9 bg-violet-600 hover:bg-violet-500 text-white px-5"
+            >
+              {loading ? "Loading..." : `Search (${total} results)`}
+            </Button>
+          </div>
         </div>
-      </div>
+      </Card>
 
       {/* Results */}
-      <div className={styles.results}>
+      <div className="space-y-3">
         {ads.map((ad) => (
-          <div key={ad.id} className={styles.adCard}>
+          <Card
+            key={ad.id}
+            className={`bg-[#1a1a2e] border transition overflow-hidden ${
+              selectedIds.has(ad.id)
+                ? "border-violet-500/60 ring-1 ring-violet-500/30"
+                : "border-white/10 hover:border-border"
+            }`}
+          >
+            {/* Ad Header */}
             <div
-              className={styles.adHeader}
-              onClick={() => setExpandedCard(expandedCard === ad.id ? null : ad.id)}
+              className="flex items-start gap-3 p-4 cursor-pointer select-none"
+              onClick={() =>
+                setExpandedCard(expandedCard === ad.id ? null : ad.id)
+              }
             >
-              <div className={styles.adScore}>
-                <span className={styles.scoreNum}>{ad.adScore.toFixed(1)}</span>
-                <span className={styles.scoreUnit}>score</span>
+              {/* Selection checkbox */}
+              <div
+                className="flex items-center pt-1 flex-shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Checkbox
+                  checked={selectedIds.has(ad.id)}
+                  onCheckedChange={() => toggleSelect(ad.id)}
+                  className="border-white/20 data-[state=checked]:bg-violet-600 data-[state=checked]:border-violet-600"
+                />
               </div>
-              <div className={styles.adInfo}>
-                <div className={styles.adTitle}>
-                  <strong>{ad.brand}</strong>
-                  <span className={styles.regionTag}>{ad.region}</span>
+              {/* Score pill */}
+              <div className="flex flex-col items-center justify-center bg-white/5 rounded-lg px-3 py-2 min-w-[56px] flex-shrink-0">
+                <span className="text-lg font-bold text-white leading-none">
+                  {ad.adScore.toFixed(1)}
+                </span>
+                <span className="text-[10px] text-gray-500 mt-0.5 uppercase tracking-wide">
+                  score
+                </span>
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <strong className="text-white font-semibold truncate">
+                    {ad.brand}
+                  </strong>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0 border-white/20 text-gray-300 bg-white/5"
+                  >
+                    {ad.region}
+                  </Badge>
                   {ad.creativePattern && (
-                    <span
-                      className={styles.patternTag}
-                      style={{ background: patternColors[ad.creativePattern] || "#64748b" }}
+                    <Badge
+                      className={`text-[10px] px-1.5 py-0 text-white border-0 ${
+                        PATTERN_CLASSES[ad.creativePattern] ?? "bg-slate-500"
+                      }`}
                     >
                       {ad.creativePattern}
-                    </span>
+                    </Badge>
                   )}
                 </div>
-                <div className={styles.adMeta}>
-                  {ad.longevityDays}d longevity · {ad.adIterationCount ?? "—"} iterations
-                  {ad.durationSeconds ? ` · ${Math.round(ad.durationSeconds)}s` : ""}
+                <p className="text-xs text-gray-400 truncate">
+                  {ad.longevityDays}d longevity · {ad.adIterationCount ?? "—"}{" "}
+                  iterations
+                  {ad.durationSeconds
+                    ? ` · ${Math.round(ad.durationSeconds)}s`
+                    : ""}
                   {ad.hookType ? ` · ${ad.hookType.slice(0, 40)}` : ""}
-                </div>
+                </p>
               </div>
-              <div className={styles.adLinks}>
+
+              {/* Action buttons */}
+              <div
+                className="flex items-center gap-1 flex-shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              >
                 {ad.adLibraryUrl && (
-                  <a href={ad.adLibraryUrl} target="_blank" rel="noopener noreferrer"
-                    className={styles.linkBtn} onClick={(e) => e.stopPropagation()}>
-                    Ad
-                  </a>
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-2.5 text-xs border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white"
+                  >
+                    <a
+                      href={ad.adLibraryUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Ad
+                    </a>
+                  </Button>
                 )}
                 {ad.videoUrl && (
-                  <a href={ad.videoUrl} target="_blank" rel="noopener noreferrer"
-                    className={styles.linkBtn} onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-2.5 text-xs border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white"
+                    onClick={() =>
+                      setVideoModal({
+                        url: ad.videoUrl!,
+                        title: `${ad.brand} — ${ad.hookType || "Ad"}`,
+                        format: ad.videoFormat,
+                        meta: {
+                          brand: ad.brand,
+                          market: ad.region,
+                          adScore: ad.adScore,
+                          longevityDays: ad.longevityDays,
+                          hookType: ad.hookType,
+                        },
+                      })
+                    }
+                  >
                     Video
-                  </a>
+                  </Button>
                 )}
+                <SaveToBoardDropdown adId={ad.id} />
               </div>
-              <span className={styles.expandIcon}>{expandedCard === ad.id ? "▾" : "▸"}</span>
+
+              {/* Expand chevron */}
+              <span className="text-gray-500 text-sm flex-shrink-0 mt-0.5">
+                {expandedCard === ad.id ? "▾" : "▸"}
+              </span>
             </div>
 
+            {/* Expanded body */}
             {expandedCard === ad.id && (
-              <div className={styles.adBody}>
+              <div className="px-4 pb-5 border-t border-white/5 pt-4">
                 <FieldBlock label="Hook Analysis" content={ad.hook} />
                 <FieldBlock label="Concept" content={ad.concept} />
                 <FieldBlock label="Script Breakdown" content={ad.scriptBreakdown} />
@@ -327,30 +494,88 @@ export default function AdExplorer() {
                 <FieldBlock label="Production Formula" content={ad.productionFormula} />
               </div>
             )}
-          </div>
+          </Card>
         ))}
       </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className={styles.pagination}>
-          <button
+        <div className="flex items-center gap-4 justify-center py-4">
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => handlePageChange(page - 1)}
             disabled={page === 0}
-            className={styles.pageBtn}
+            className="border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white disabled:opacity-40"
           >
             Prev
-          </button>
-          <span className={styles.pageInfo}>
+          </Button>
+          <span className="text-sm text-gray-400">
             Page {page + 1} of {totalPages}
           </span>
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => handlePageChange(page + 1)}
             disabled={page >= totalPages - 1}
-            className={styles.pageBtn}
+            className="border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white disabled:opacity-40"
           >
             Next
-          </button>
+          </Button>
+        </div>
+      )}
+
+      {/* Video Player Modal */}
+      {videoModal && (
+        <VideoPlayerModal
+          videoUrl={videoModal.url}
+          adTitle={videoModal.title}
+          videoFormat={videoModal.format}
+          metadata={videoModal.meta}
+          isOpen={true}
+          onClose={() => setVideoModal(null)}
+        />
+      )}
+
+      {/* Brief Generate Modal */}
+      <BriefGenerateModal
+        adIds={Array.from(selectedIds)}
+        isOpen={briefModal}
+        onClose={() => setBriefModal(false)}
+      />
+
+      {/* Floating Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-xl bg-[#1a1a2e]/95 backdrop-blur-lg border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+          <span className="text-sm text-gray-300 font-medium mr-1">
+            {selectedIds.size} selected
+          </span>
+
+          <Button
+            size="sm"
+            onClick={handleCompare}
+            disabled={selectedIds.size < 2 || selectedIds.size > 3}
+            className="bg-cyan-600 hover:bg-cyan-500 text-white disabled:opacity-40"
+          >
+            Compare {selectedIds.size >= 2 && selectedIds.size <= 3 ? `(${selectedIds.size})` : ""}
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={() => setBriefModal(true)}
+            className="bg-violet-600 hover:bg-violet-500 text-white"
+          >
+            Generate Brief
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearSelection}
+            className="text-gray-400 hover:text-white hover:bg-white/10"
+          >
+            Clear
+          </Button>
         </div>
       )}
     </div>

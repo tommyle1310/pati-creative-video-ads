@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import styles from "./CrawlLauncher.module.css";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface Props {
   onCrawlStarted: (jobId: string) => void;
@@ -9,9 +10,9 @@ interface Props {
 }
 
 const MARKETS = [
-  { code: "US", label: "🇺🇸 United States", flag: "🇺🇸" },
-  { code: "UK", label: "🇬🇧 United Kingdom", flag: "🇬🇧" },
-  { code: "AU", label: "🇦🇺 Australia", flag: "🇦🇺" },
+  { code: "US", flag: "🇺🇸" },
+  { code: "UK", flag: "🇬🇧" },
+  { code: "AU", flag: "🇦🇺" },
 ];
 
 export default function CrawlLauncher({ onCrawlStarted, disabled }: Props) {
@@ -27,10 +28,9 @@ export default function CrawlLauncher({ onCrawlStarted, disabled }: Props) {
     );
   };
 
-  // Dynamic discovery: ~10 brands auto-discovered per market
   const BRANDS_PER_MARKET = 10;
   const estimatedBrands = selectedMarkets.length * BRANDS_PER_MARKET;
-  const estimatedAds = estimatedBrands * 5; // 5 ads per brand
+  const estimatedAds = estimatedBrands * 5;
   const estimatedCost = `~$${(estimatedAds * 0.036).toFixed(2)}`;
 
   const handleSubmit = async (e: FormEvent) => {
@@ -60,71 +60,75 @@ export default function CrawlLauncher({ onCrawlStarted, disabled }: Props) {
   };
 
   return (
-    <form className={styles.launcher} onSubmit={handleSubmit}>
+    <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
       {/* Markets */}
-      <div className={styles.fieldGroup}>
-        <label className={styles.label}>Markets</label>
-        <div className={styles.marketGrid}>
-          {MARKETS.map((m) => (
-            <button
-              key={m.code}
-              type="button"
-              className={`${styles.marketBtn} ${
-                selectedMarkets.includes(m.code) ? styles.marketActive : ""
-              }`}
-              onClick={() => toggleMarket(m.code)}
-            >
-              <span className={styles.flag}>{m.flag}</span>
-              <span>{m.code}</span>
-            </button>
-          ))}
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Markets
+        </label>
+        <div className="flex gap-2.5">
+          {MARKETS.map((m) => {
+            const active = selectedMarkets.includes(m.code);
+            return (
+              <button
+                key={m.code}
+                type="button"
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-md border text-sm font-medium transition-all cursor-pointer ${
+                  active
+                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
+                    : "border-border bg-muted/50 text-muted-foreground hover:border-emerald-500/50 hover:text-foreground"
+                }`}
+                onClick={() => toggleMarket(m.code)}
+              >
+                <span className="text-lg">{m.flag}</span>
+                <span>{m.code}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Keyword */}
-      <div className={styles.fieldGroup}>
-        <label className={styles.label}>Keyword</label>
-        <input
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Keyword
+        </label>
+        <Input
           type="text"
-          className={styles.input}
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           placeholder="creatine gummies"
+          className="max-w-[360px] bg-muted/50 border-border text-foreground placeholder:text-muted-foreground"
         />
       </div>
 
       {/* Estimate */}
-      <div className={styles.estimate}>
-        <div className={styles.estimateRow}>
-          <span>Brands</span>
-          <span className={styles.estimateValue}>~{estimatedBrands} ({selectedMarkets.join(", ")}) auto-discovered</span>
-        </div>
-        <div className={styles.estimateRow}>
-          <span>Ads per brand</span>
-          <span className={styles.estimateValue}>5</span>
-        </div>
-        <div className={styles.estimateRow}>
-          <span>Estimated ads</span>
-          <span className={styles.estimateValue}>{estimatedAds}</span>
-        </div>
-        <div className={styles.estimateRow}>
-          <span>Estimated cost</span>
-          <span className={styles.estimateValue}>{estimatedCost}</span>
-        </div>
+      <div className="max-w-[360px] p-4 bg-muted/50 rounded-md border border-border/40">
+        {[
+          { label: "Brands", value: `~${estimatedBrands} (${selectedMarkets.join(", ")}) auto-discovered` },
+          { label: "Ads per brand", value: "5" },
+          { label: "Estimated ads", value: String(estimatedAds) },
+          { label: "Estimated cost", value: estimatedCost },
+        ].map((row) => (
+          <div key={row.label} className="flex justify-between items-center py-1 text-sm">
+            <span className="text-muted-foreground">{row.label}</span>
+            <span className="font-semibold text-foreground font-mono text-xs">{row.value}</span>
+          </div>
+        ))}
       </div>
 
       {/* Submit */}
-      <button
+      <Button
         type="submit"
-        className={styles.submitBtn}
         disabled={disabled || loading || selectedMarkets.length === 0}
+        className="max-w-[240px] bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-bold shadow-[0_4px_14px_rgba(0,200,150,0.3)] hover:shadow-[0_6px_20px_rgba(0,200,150,0.4)] hover:-translate-y-0.5 transition-all"
       >
         {loading ? (
-          <span className={styles.spinner} />
+          <span className="w-[18px] h-[18px] border-2 border-white/30 border-t-white rounded-full animate-spin" />
         ) : (
-          <>🔬 Start Crawl</>
+          "🔬 Start Crawl"
         )}
-      </button>
+      </Button>
     </form>
   );
 }

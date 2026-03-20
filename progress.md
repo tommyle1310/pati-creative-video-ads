@@ -134,3 +134,26 @@ NEW: Apify ALL markets → filter ALL → group by brand → pre-rank → Sonnet
 - Cost: same ~$2-3 total (Haiku savings offset by nothing — it was cheap)
 
 **Files unchanged:** record_generator.py, excel_builder.py, gsheet_writer.py, apify_crawler.py, ocr_gate.py, prescreen.py, route.ts, all dashboard components, Prisma schema.
+
+## 2026-03-19
+
+### Session 9: 6-Feature Build — Competitive Intelligence Platform
+
+**All 6 features shipped. Build passes with zero errors.**
+
+1. **Prisma Schema** — Added Board, SavedAd, Brief models. SavedAd cascades on AdRecord + Board delete. Brief.basedOnAdIds is String[] (not relation).
+2. **VideoPlayerModal** — In-app video player with /api/video-proxy (fbcdn CORS bypass). Keyboard shortcuts (Space, arrows, Esc). Wired into TopWinners + AdExplorer.
+3. **Brand Search** — /api/brands autocomplete (groupBy brand+pageName+region). Updated /api/ads to search pageName OR brand.
+4. **Saved Boards** — Full CRUD (boards + saved ads). SaveToBoardDropdown component. /saved gallery + /saved/[boardId] detail with notes + sort.
+5. **Trending Ads** — /api/trending with trending score (longevity 35% + impressions 20% + iterations 20% + recency 15% + adScore 10%). /trending page with market/period/longevity/hookType filters.
+6. **Side-by-Side Comparison** — /api/ads/compare with shared pattern detection + Claude Haiku verdict. /compare page with green/amber field highlighting.
+7. **Competitive Brief Generator** — /api/briefs (Claude Sonnet generation). BriefGenerateModal. /briefs list + /briefs/[id] detail (hooks, script outline, differentiators). Post-processes all output to remove dashes.
+8. **Navigation Sidebar** — 5-item sidebar (Dashboard, Trending, Saved, Compare, Briefs). Updated layout.tsx.
+
+**New files created (28):**
+- API routes: video-proxy, brands, boards (4 routes), trending, ads/compare, briefs (2 routes)
+- Components: VideoPlayerModal, SaveToBoardDropdown, BriefGenerateModal, Sidebar
+- Pages: /saved, /saved/[boardId], /trending, /compare, /briefs, /briefs/[id]
+- CSS modules: 10 new .module.css files
+
+**Build verification:** TypeScript zero errors. Next.js build zero errors. 25 routes (10 static, 15 dynamic).

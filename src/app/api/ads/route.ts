@@ -43,7 +43,12 @@ export async function GET(request: NextRequest) {
     const where: any = {};
 
     if (region) where.region = region;
-    if (brand) where.brand = { contains: brand, mode: "insensitive" };
+    if (brand) {
+      where.OR = [
+        { brand: { contains: brand, mode: "insensitive" } },
+        { pageName: { contains: brand, mode: "insensitive" } },
+      ];
+    }
     if (hookType) where.hookType = { contains: hookType, mode: "insensitive" };
     if (creativePattern) where.creativePattern = creativePattern;
 
