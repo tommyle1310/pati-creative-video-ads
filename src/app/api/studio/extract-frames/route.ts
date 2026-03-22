@@ -59,10 +59,10 @@ async function getFormat(videoPath: string): Promise<string> {
 function getTimestamps(duration: number): number[] {
   if (duration <= 0) return [0];
 
-  // Video ads change visuals frequently — extract ~2 frames/second
-  // for accurate scene-cut detection. Cap at 120 frames.
-  const interval = 0.5; // every 0.5 seconds
-  const maxFrames = 120;
+  // Extract ~1 frame/second — enough for scene detection without
+  // flooding the client/Gemini with redundant frames. Cap at 60.
+  const interval = 1.0; // every 1 second
+  const maxFrames = 60;
   const timestamps: number[] = [];
 
   for (let t = 0; t < duration; t += interval) {
@@ -83,12 +83,12 @@ async function extractFrames(
 ): Promise<string[]> {
   const timestamps = getTimestamps(duration);
 
-  // Use a single FFmpeg pass with fps filter for efficiency (2 fps)
+  // Use a single FFmpeg pass with fps filter for efficiency (1 fps)
   const outputPattern = path.join(jobDir, "frame_%04d.jpg");
   try {
     await run("ffmpeg", [
       "-i", videoPath,
-      "-vf", "fps=2",
+      "-vf", "fps=1",
       "-q:v", "4",
       "-y", outputPattern,
     ], 120000); // 2 min timeout for longer videos
@@ -124,8 +124,8 @@ async function extractFrames(
     }
   }
 
-  // Cap at 120 frames
-  return framePaths.slice(0, 120);
+  // Cap at 60 frames
+  return framePaths.slice(0, 60);
 }
 
 async function downloadVideo(url: string, outputPath: string): Promise<void> {

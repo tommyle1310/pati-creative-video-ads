@@ -36,6 +36,12 @@ Label each scene with its marketing purpose AND its visual roll type:
 - If there's both voiceover AND text overlay, include both: "VO: [speech] | TEXT: [overlay]"
 - Do NOT summarize or paraphrase — write the EXACT words
 
+## SUBTITLE vs OVERLAY DETECTION
+- If text overlays closely match (~90%+) the spoken voiceover (i.e. they are subtitles/captions), mark them as SUBTITLES in the speech field: "VO: [speech] | SUBTITLES: yes"
+- Do NOT include subtitle text separately — it's redundant with the voiceover and should NOT be used for image prompting later
+- Only include TEXT: entries for DISTINCT text overlays (headlines, CTAs, product claims) that are NOT subtitles of the voiceover
+- ~90% of ads use subtitles that mirror the voiceover — these are for accessibility, not visual design elements
+
 ## VISUAL DESCRIPTION
 - Describe each scene in RICH detail: subject appearance, clothing, pose, camera angle, lighting, background, product visibility, color palette, motion/animation type
 - For anatomy/science scenes: name specific anatomical structures visible, glow colors, animation behavior
@@ -151,12 +157,15 @@ All image prompts must be DETAILED paragraphs (not JSON). Include:
 ## VIDEO PROMPT RULES
 **HARD LIMIT: 2,500 characters.** Video models truncate beyond this.
 
+**CRITICAL AUDIO RULE: Every video prompt MUST include "No Music Background. No ambient sounds. No sound effects. Complete silence except voiceover." This is mandatory for ALL roll types.**
+
 Compression strategy:
 1. Skip face structure details — reference image carries them
 2. Merge anatomy/detail into single dense sentences
 3. Prioritize ACTION and MOVEMENT over static description
 4. Lock expression with triple-reinforcement (3 synonymous constraints)
 5. End with anti-AI rendering cue (camera model + lens)
+6. Always end with "No Music Background" constraint
 
 ### A-Roll Video Structure:
 - format, voice, setting (2-3 sentences), subject ("Same person as reference" + outfit confirmations), action (frame-by-frame choreography, ONE punctuating gesture), expression (sustained state, NOT arc), camera (handheld, micro-wobble), lip_sync (jaw behavior separate from expression), voiceover (EXACT script, NEVER modified), technical (ISO, no color grade)
@@ -200,17 +209,19 @@ Andromeda's Entity ID system groups visually similar ads together. To create TRU
 
 ## CRITICAL OUTPUT RULES
 
-### imagePrompt (MUST be 400-800 words, rich detailed paragraph)
-- A-Roll: Start with "Hyperrealistic photography". Include: subject demographics, face structure (jawline, eyes), micro-expression with muscle detail ("left corner of mouth slightly raised"), 3+ named skin imperfections with locations ("real acne blemishes and freckles on cheeks and nose"), exact hair description with anti-pattern, outfit details, pose with energy descriptor and anti-pattern, exact hand + product grip (which fingers), product color/size/material/branding text/orientation, specific background with 3-5 named objects, practical lighting only (from objects IN the scene, name the practical and its color cast), secondary light source, shadow description, camera lens + aperture + grain + aspect ratio, and a negative prompt section with 8+ exclusions.
-- B-Roll: Include: subject ethnicity/age/build with weight estimate, face unique features (3-5 traits), expression (what IS and is NOT), eye direction, head angle, hair with style/texture/color/anti-pattern, skin tone + 5+ texture requirements (pores, oil sheen, razor bumps, stretch marks, ashiness), physique with key visual traits, clothing with how it interacts with physique, EVERY finger's state for each hand (which grip, which curl away), product exact dimensions + size comparison + material + branding + condition + orientation, per-gummy positions if applicable, setting with anti-pattern, lighting source/temperature/shadows/product light interaction, camera as phone (iPhone 15 Pro), depth of field, grain, color grading, framing, and 15+ items in what_to_avoid.
-- C-Roll: Include: concept summary + visual metaphor + hero element, subject demographics + pose + expression, anatomy layers with coverage percentage + primary/secondary/tertiary layers each named with descriptions and color palettes, ghost skin opacity range, product interaction if present, glow characteristics per tissue type (bone/muscle/cartilage/organ), outer aura, lighting with self-illumination percentage, camera format + DOF + focus point + grain + color treatment + framing, and 10+ what_to_avoid items.
+### imagePrompt — MUST be a valid JSON object string following the roll-type schema:
 
-### videoPrompt (MUST be 800-2500 characters, structured and specific)
-- End with anti-AI cue ("Shot on Sony A7IV, 85mm lens" for B/C-Roll, "Shot on iPhone 15 Pro, f/1.8" for A-Roll)
-- Triple-lock expressions in every video prompt
-- A-Roll: Include format, setting (2-3 sentences), subject ("Same person as reference" + 3-4 outfit confirmations), action (frame-by-frame with ONE punctuating gesture), expression (sustained state), camera (handheld micro-wobble), lip_sync (jaw behavior + speech register), voiceover (EXACT script SACRED), technical (ISO, no color grade)
-- B-Roll: Include subject_description (1 sentence), action (2-3 sentences temporal), physical_micro_detail (PHYSICAL not emotional), expression_lock (triple), secondary_motion, lighting_setting, camera_feel, negative_behaviors (4-5), skin_realism, anti_ai_cue
-- C-Roll: Include camera_behavior (LOCKED), background, subject_anatomy (2-3 dense sentences), eye_treatment if visible, action_sequence (numbered steps), movement_constraints, expression_lock (triple), technical
+**A-Roll image JSON keys:** opening_tag, subject (demographic, face {structure, eyes, skin_imperfections, expression}, hair, outfit {top, accessories}), pose (body_position, leg_position, energy, anti_pattern), hands_and_product (overall_action, dominant_hand {action, product_state}, support_hand {action}, motion_descriptor), product_detail (primary_product {name, color_material, branding_text, orientation}), background (setting, key_elements, background_blur), lighting (primary_source, secondary_source, shadow_description, skin_light_interaction), camera (lens, angle, aspect_ratio, grain), negative_prompt (array of 8+ exclusions)
+
+**B-Roll image JSON keys:** concept (summary, format), subject (ethnicity, age_range, gender, face_details {unique_features, facial_hair, expression, eye_direction, head_angle}, hair {style, texture, color, length, anti_pattern}, skin {tone, texture_requirements[], anti_smoothing}, physique {build_descriptor, key_visual_traits}), clothing (top, accessories), hands_and_product (left_hand {position, action, grip_detail}, right_hand {position, action, grip_detail}, hand_skin_detail), product (primary_item {name, size, material_finish, branding_visible, condition, orientation}), setting (location, focus_treatment, anti_pattern), lighting (source, color_temperature, quality, shadows, product_light, anti_pattern), camera (device, depth_of_field, grain_noise, color_grading, aspect_ratio, framing), what_to_avoid (15+ items)
+
+**C-Roll image JSON keys:** concept (summary, visual_metaphor, hero_element), subject (ethnicity, age_range, build, hair, pose, expression), anatomy_layers (coverage_percentage, primary_layer {name, description, color_palette}, secondary_layer {name, description, color_palette}, ghost_skin_layer {opacity_range, visible_features}), glow_and_color (dominant_tone, bone_glow, muscle_glow, cartilage_tendon, soft_organ, outer_aura), lighting (background, self_illumination_percentage, internal_glow_description), camera (format, depth_of_field, focus_point, grain, color_treatment, framing), what_to_avoid (10+ items)
+
+### videoPrompt — MUST be a valid JSON object string (HARD LIMIT 2500 chars when serialized):
+
+**A-Roll video JSON keys:** format, voice, setting, subject, action, expression, camera, lip_sync, voiceover (EXACT script, SACRED), technical
+**B-Roll video JSON keys:** subject_description, action, physical_micro_detail, expression_lock (triple), secondary_motion, lighting_setting, camera_feel, negative_behaviors, skin_realism, anti_ai_cue
+**C-Roll video JSON keys:** camera_behavior (LOCKED), background, subject_anatomy, eye_treatment, action_sequence, movement_constraints, expression_lock (triple), technical
 
 ### rollType: MUST be one of "aroll", "broll", "croll"
 - For A-Roll scenes: voiceover is SACRED — never modify the script dialogue
@@ -550,10 +561,13 @@ export async function generateClonedStoryboard(
         rollType?: string;
         voiceoverScript: string;
         voiceoverGuide: string;
-        imagePrompt: string;
-        videoPrompt: string;
+        imagePrompt: string | object;
+        videoPrompt: string | object;
       }) => createDefaultScene({
         ...s,
+        // Gemini may return prompts as JSON objects — ensure they're stored as strings
+        imagePrompt: typeof s.imagePrompt === "object" ? JSON.stringify(s.imagePrompt, null, 2) : s.imagePrompt,
+        videoPrompt: typeof s.videoPrompt === "object" ? JSON.stringify(s.videoPrompt, null, 2) : s.videoPrompt,
         rollType: (["aroll", "broll", "croll"].includes(s.rollType || "") ? s.rollType : undefined) as RollType | undefined,
       })
     );

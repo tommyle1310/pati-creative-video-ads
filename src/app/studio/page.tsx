@@ -25,6 +25,14 @@ import {
   Wand2,
   Download,
   Trash2,
+  Plus,
+  Link,
+  Globe,
+  Maximize2,
+  Mic,
+  MicOff,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 // ── State ────────────────────────────────────────────────────
@@ -49,6 +57,8 @@ interface StudioState {
   bigIdea: string;
   productInfo: string;
   targetAudience: string;
+  landingPageUrls: string[];
+  isScrapingUrls: boolean;
   // Creative Strategy (Meta Ads AI Stack)
   motivator: string;
   emotionalTone: string;
@@ -103,6 +113,8 @@ const initialState: StudioState = {
   bigIdea: "",
   productInfo: "",
   targetAudience: "",
+  landingPageUrls: [""],
+  isScrapingUrls: false,
   motivator: "",
   emotionalTone: "",
   storylineType: "",
@@ -292,6 +304,17 @@ export default function StudioPage() {
     }
   };
 
+  // ── Step 6: local UI state ──
+  const [previewModal, setPreviewModal] = useState<{ type: "image" | "video"; src: string } | null>(null);
+  const [expandedScenes, setExpandedScenes] = useState<Set<string>>(new Set());
+  const toggleSceneExpanded = (id: string) => {
+    setExpandedScenes((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   // ── Step 1: Source ──
 
   const [dbAds, setDbAds] = useState<
@@ -395,6 +418,45 @@ export default function StudioPage() {
     },
     []
   );
+
+  // ── Step 3: Landing page scrape & auto-fill ──
+
+  const handleAddUrl = useCallback(() => {
+    dispatch({ type: "SET_FIELD", field: "landingPageUrls", value: [...s.landingPageUrls, ""] });
+  }, [s.landingPageUrls]);
+
+  const handleRemoveUrl = useCallback((index: number) => {
+    const next = s.landingPageUrls.filter((_, i) => i !== index);
+    dispatch({ type: "SET_FIELD", field: "landingPageUrls", value: next.length ? next : [""] });
+  }, [s.landingPageUrls]);
+
+  const handleUrlChange = useCallback((index: number, value: string) => {
+    const next = [...s.landingPageUrls];
+    next[index] = value;
+    dispatch({ type: "SET_FIELD", field: "landingPageUrls", value: next });
+  }, [s.landingPageUrls]);
+
+  const handleScrapeLandingPages = useCallback(async () => {
+    const urls = s.landingPageUrls.filter((u) => u.trim());
+    if (!urls.length) return;
+    dispatch({ type: "SET_FIELD", field: "isScrapingUrls", value: true });
+    try {
+      const res = await fetch("/api/studio/scrape-landing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      const data = await res.json();
+      if (data.bigIdea) dispatch({ type: "SET_FIELD", field: "bigIdea", value: data.bigIdea });
+      if (data.productInfo) dispatch({ type: "SET_FIELD", field: "productInfo", value: data.productInfo });
+      if (data.targetAudience) dispatch({ type: "SET_FIELD", field: "targetAudience", value: data.targetAudience });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Scrape failed");
+    } finally {
+      dispatch({ type: "SET_FIELD", field: "isScrapingUrls", value: false });
+    }
+  }, [s.landingPageUrls]);
 
   // ── Step 4: Generate script ──
 
@@ -500,7 +562,8 @@ export default function StudioPage() {
       try {
         const { productUrl, creatorUrl } = await ensureVidtoryUploads();
 
-        let prompt = scene.imagePrompt;
+        // Ensure imagePrompt is a string (may be JSON object from storyboard gen)
+        let prompt = typeof scene.imagePrompt === "object" ? JSON.stringify(scene.imagePrompt) : scene.imagePrompt;
         // Prepend realism anchor for A-Roll scenes if not already present
         if (scene.rollType === "aroll" && !prompt.toLowerCase().startsWith("hyperrealistic")) {
           prompt = `Hyperrealistic photography. ${prompt}`;
@@ -561,12 +624,14 @@ export default function StudioPage() {
       });
 
       try {
-        let prompt = `Motion/Action: ${scene.videoPrompt}`;
+        // Ensure videoPrompt is a string (may be JSON object from storyboard gen)
+        const vpStr = typeof scene.videoPrompt === "object" ? JSON.stringify(scene.videoPrompt) : scene.videoPrompt;
+        let prompt = `Motion/Action: ${vpStr}`;
         if (scene.includeDialogueInPrompt) {
           prompt = `The creator is speaking.\n${prompt}`;
           prompt += `\nDialogue in English: "${scene.voiceoverScript}"`;
         }
-        prompt += "\n\nNo Music Background";
+        prompt += "\n\nAUDIO CONSTRAINT: Absolutely NO background music. NO ambient sounds. NO sound effects. NO soundtrack. Complete silence except for voiceover if present. No Music Background.";
         // Append anti-AI rendering cue based on roll type
         const rollType = scene.rollType || "broll";
         if (rollType === "aroll") {
@@ -642,10 +707,40 @@ export default function StudioPage() {
         if (!res.ok) throw new Error((await res.json()).error);
         const { audioBase64 } = await res.json();
 
-        const bytes = Uint8Array.from(atob(audioBase64), (c) =>
+        const pcmBytes = Uint8Array.from(atob(audioBase64), (c) =>
           c.charCodeAt(0)
         );
-        const blob = new Blob([bytes], { type: "audio/wav" });
+        // Wrap raw PCM (Linear16, 24kHz, mono) in a proper WAV header
+        const wavHeader = new ArrayBuffer(44);
+        const view = new DataView(wavHeader);
+        const sampleRate = 24000;
+        const numChannels = 1;
+        const bitsPerSample = 16;
+        const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+        const blockAlign = numChannels * (bitsPerSample / 8);
+        const dataSize = pcmBytes.length;
+        // RIFF header
+        view.setUint32(0, 0x52494646, false); // "RIFF"
+        view.setUint32(4, 36 + dataSize, true);
+        view.setUint32(8, 0x57415645, false); // "WAVE"
+        // fmt sub-chunk
+        view.setUint32(12, 0x666d7420, false); // "fmt "
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true); // PCM
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, byteRate, true);
+        view.setUint16(32, blockAlign, true);
+        view.setUint16(34, bitsPerSample, true);
+        // data sub-chunk
+        view.setUint32(36, 0x64617461, false); // "data"
+        view.setUint32(40, dataSize, true);
+
+        const wavBytes = new Uint8Array(44 + dataSize);
+        wavBytes.set(new Uint8Array(wavHeader), 0);
+        wavBytes.set(pcmBytes, 44);
+
+        const blob = new Blob([wavBytes], { type: "audio/wav" });
         const audioUrl = URL.createObjectURL(blob);
 
         dispatch({
@@ -1086,6 +1181,58 @@ export default function StudioPage() {
               </div>
             </div>
 
+            {/* Landing Page URLs — AI auto-fill */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium flex items-center gap-1.5">
+                  <Globe size={14} />
+                  Landing Page URLs
+                  <span className="text-xs font-normal text-muted-foreground">(AI auto-fills fields below)</span>
+                </label>
+                <button
+                  onClick={handleScrapeLandingPages}
+                  disabled={s.isScrapingUrls || !s.landingPageUrls.some((u) => u.trim())}
+                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer"
+                >
+                  {s.isScrapingUrls ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={14} />
+                  )}
+                  {s.isScrapingUrls ? "Scraping..." : "Auto-fill from URLs"}
+                </button>
+              </div>
+              {s.landingPageUrls.map((url, i) => (
+                <div key={i} className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Link size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="url"
+                      value={url}
+                      onChange={(e) => handleUrlChange(i, e.target.value)}
+                      placeholder="https://example.com/product"
+                      className="w-full bg-background border border-border rounded px-3 py-2 pl-8 text-sm"
+                    />
+                  </div>
+                  {s.landingPageUrls.length > 1 && (
+                    <button
+                      onClick={() => handleRemoveUrl(i)}
+                      className="p-2 text-muted-foreground hover:text-red-400 transition-colors cursor-pointer"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={handleAddUrl}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              >
+                <Plus size={14} />
+                Add another URL
+              </button>
+            </div>
+
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium">
@@ -1506,17 +1653,14 @@ export default function StudioPage() {
         {/* ── STEP 6: Generate Assets ── */}
         {s.step === 6 && (
           <div className="space-y-6">
+            {/* Header + controls */}
             <div className="flex items-center justify-between flex-wrap gap-3">
               <h2 className="text-lg font-semibold">Generate Assets</h2>
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2 flex-wrap items-center">
                 <select
                   value={s.aspectRatio}
                   onChange={(e) =>
-                    dispatch({
-                      type: "SET_FIELD",
-                      field: "aspectRatio",
-                      value: e.target.value,
-                    })
+                    dispatch({ type: "SET_FIELD", field: "aspectRatio", value: e.target.value })
                   }
                   className="bg-background border border-border rounded px-2 py-1 text-sm"
                 >
@@ -1527,47 +1671,60 @@ export default function StudioPage() {
                 <select
                   value={s.voice}
                   onChange={(e) =>
-                    dispatch({
-                      type: "SET_FIELD",
-                      field: "voice",
-                      value: e.target.value,
-                    })
+                    dispatch({ type: "SET_FIELD", field: "voice", value: e.target.value })
                   }
                   className="bg-background border border-border rounded px-2 py-1 text-sm"
                 >
                   {VOICES.map((v) => (
-                    <option key={v} value={v}>
-                      {v}
-                    </option>
+                    <option key={v} value={v}>{v}</option>
                   ))}
                 </select>
                 <button
                   onClick={handleGenerateAllImages}
-                  className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm"
+                  disabled={s.scenes.every((sc) => sc.isGeneratingImage)}
+                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-3 py-1.5 rounded text-sm"
                 >
-                  <ImageIcon size={14} /> All Images
+                  {s.scenes.some((sc) => sc.isGeneratingImage) ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <ImageIcon size={14} />
+                  )}
+                  All Images
                 </button>
                 <button
                   onClick={handleGenerateAllAudio}
-                  className="flex items-center gap-1 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded text-sm"
+                  disabled={s.scenes.every((sc) => sc.isGeneratingAudio)}
+                  className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-3 py-1.5 rounded text-sm"
                 >
-                  <Volume2 size={14} /> All Audio
+                  {s.scenes.some((sc) => sc.isGeneratingAudio) ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Volume2 size={14} />
+                  )}
+                  All Audio
                 </button>
               </div>
             </div>
 
+            {/* Scene cards */}
             <div className="space-y-4">
-              {s.scenes.map((scene, i) => (
+              {s.scenes.map((scene, i) => {
+                const isExpanded = expandedScenes.has(scene.id);
+                return (
                 <div
                   key={scene.id}
-                  className="bg-muted/20 border border-border rounded-lg p-4"
+                  className="bg-muted/20 border border-border rounded-lg overflow-hidden"
                 >
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-sm font-medium text-emerald-400">
+                  {/* Scene header — always visible */}
+                  <button
+                    onClick={() => toggleSceneExpanded(scene.id)}
+                    className="w-full flex items-center gap-2 px-4 py-3 hover:bg-muted/30 transition-colors text-left"
+                  >
+                    <span className="text-sm font-medium text-emerald-400 shrink-0">
                       Scene {i + 1}
                     </span>
                     {scene.rollType && (
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
                         scene.rollType === "aroll" ? "bg-blue-500/20 text-blue-400" :
                         scene.rollType === "broll" ? "bg-amber-500/20 text-amber-400" :
                         "bg-purple-500/20 text-purple-400"
@@ -1575,126 +1732,289 @@ export default function StudioPage() {
                         {scene.rollType === "aroll" ? "A-ROLL" : scene.rollType === "broll" ? "B-ROLL" : "C-ROLL"}
                       </span>
                     )}
-                    <span className="text-xs text-muted-foreground truncate">
-                      {scene.voiceoverScript.slice(0, 60)}...
+                    {/* Status indicators */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {scene.isGeneratingImage && <Loader2 size={12} className="animate-spin text-blue-400" />}
+                      {scene.images.length > 0 && <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1 rounded">{scene.images.length} img</span>}
+                      {scene.isGeneratingVideo && <Loader2 size={12} className="animate-spin text-emerald-400" />}
+                      {scene.videos.length > 0 && <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1 rounded">{scene.videos.length} vid</span>}
+                      {scene.isGeneratingAudio && <Loader2 size={12} className="animate-spin text-purple-400" />}
+                      {scene.audioUrl && <span className="text-[10px] bg-purple-500/20 text-purple-400 px-1 rounded">audio</span>}
+                    </div>
+                    <span className="text-xs text-muted-foreground truncate flex-1">
+                      {scene.voiceoverScript.slice(0, 80)}{scene.voiceoverScript.length > 80 ? "..." : ""}
                     </span>
-                  </div>
+                    {isExpanded ? <ChevronUp size={16} className="text-muted-foreground shrink-0" /> : <ChevronDown size={16} className="text-muted-foreground shrink-0" />}
+                  </button>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Image column */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium">Image</span>
+                  {/* Expanded content */}
+                  {isExpanded && (
+                    <div className="px-4 pb-4 space-y-4 border-t border-border pt-4">
+                      {/* Lipsync toggle */}
+                      <div className="flex items-center gap-3">
                         <button
-                          onClick={() => handleGenerateImage(scene.id)}
-                          disabled={scene.isGeneratingImage}
-                          className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded flex items-center gap-1"
+                          onClick={() => dispatch({
+                            type: "UPDATE_SCENE",
+                            id: scene.id,
+                            patch: { includeDialogueInPrompt: !scene.includeDialogueInPrompt },
+                          })}
+                          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-colors ${
+                            scene.includeDialogueInPrompt
+                              ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
+                              : "border-border text-muted-foreground hover:border-muted-foreground"
+                          }`}
                         >
-                          {scene.isGeneratingImage ? (
-                            <Loader2 size={12} className="animate-spin" />
-                          ) : (
-                            <ImageIcon size={12} />
-                          )}
-                          Gen
+                          {scene.includeDialogueInPrompt ? <Mic size={12} /> : <MicOff size={12} />}
+                          {scene.includeDialogueInPrompt ? "Lipsync ON" : "Lipsync OFF"}
                         </button>
+                        <span className="text-[10px] text-muted-foreground">
+                          {scene.includeDialogueInPrompt
+                            ? "Video will include dialogue for lip-sync"
+                            : "Video will be silent (no lip-sync)"}
+                        </span>
                       </div>
-                      {scene.imageGenerationError && (
-                        <p className="text-xs text-red-400">
-                          {scene.imageGenerationError}
-                        </p>
-                      )}
-                      <div className="flex gap-1 flex-wrap">
-                        {scene.images.map((img, j) => (
-                          <img
-                            key={j}
-                            src={img}
-                            alt={`Scene ${i + 1} image ${j}`}
-                            onClick={() =>
-                              dispatch({
-                                type: "UPDATE_SCENE",
-                                id: scene.id,
-                                patch: { selectedImageForVideo: img },
-                              })
+
+                      {/* Editable prompts */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-xs font-medium text-blue-400">Image Prompt</label>
+                            <button
+                              onClick={() => handleEnhancePrompt(scene.id, "image")}
+                              className="text-[10px] px-2 py-0.5 bg-muted hover:bg-muted/80 rounded flex items-center gap-1"
+                              title="Enhance with AI"
+                            >
+                              <Wand2 size={10} /> Enhance
+                            </button>
+                          </div>
+                          <textarea
+                            value={scene.imagePrompt}
+                            onChange={(e) =>
+                              dispatch({ type: "UPDATE_SCENE", id: scene.id, patch: { imagePrompt: e.target.value } })
                             }
-                            className={`h-20 rounded cursor-pointer border-2 transition-colors ${
-                              scene.selectedImageForVideo === img
-                                ? "border-emerald-500"
-                                : "border-transparent hover:border-muted-foreground"
-                            }`}
+                            className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs font-mono h-32 resize-y"
                           />
-                        ))}
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-xs font-medium text-emerald-400">Video Prompt</label>
+                            <button
+                              onClick={() => handleEnhancePrompt(scene.id, "video")}
+                              className="text-[10px] px-2 py-0.5 bg-muted hover:bg-muted/80 rounded flex items-center gap-1"
+                              title="Enhance with AI"
+                            >
+                              <Wand2 size={10} /> Enhance
+                            </button>
+                          </div>
+                          <textarea
+                            value={scene.videoPrompt}
+                            onChange={(e) =>
+                              dispatch({ type: "UPDATE_SCENE", id: scene.id, patch: { videoPrompt: e.target.value } })
+                            }
+                            className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs font-mono h-32 resize-y"
+                          />
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Video column */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium">Video</span>
-                        <button
-                          onClick={() => handleGenerateVideo(scene.id)}
-                          disabled={
-                            scene.isGeneratingVideo ||
-                            !scene.selectedImageForVideo
-                          }
-                          className="text-xs px-2 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded flex items-center gap-1"
-                        >
-                          {scene.isGeneratingVideo ? (
-                            <Loader2 size={12} className="animate-spin" />
-                          ) : (
-                            <Video size={12} />
+                      {/* Generation cards: Image | Video | Audio */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {/* ── Image Card ── */}
+                        <div className="border border-blue-500/20 bg-blue-500/5 rounded-lg p-3 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold flex items-center gap-1.5 text-blue-400">
+                              <ImageIcon size={14} /> Images
+                            </span>
+                            <button
+                              onClick={() => handleGenerateImage(scene.id)}
+                              disabled={scene.isGeneratingImage}
+                              className="text-xs px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md flex items-center gap-1.5 font-medium"
+                            >
+                              {scene.isGeneratingImage ? (
+                                <Loader2 size={12} className="animate-spin" />
+                              ) : (
+                                <Plus size={12} />
+                              )}
+                              {scene.isGeneratingImage ? "Generating..." : "Generate"}
+                            </button>
+                          </div>
+                          {scene.imageGenerationError && (
+                            <p className="text-xs text-red-400 bg-red-500/10 rounded px-2 py-1">{scene.imageGenerationError}</p>
                           )}
-                          Gen
-                        </button>
-                      </div>
-                      {scene.videoGenerationError && (
-                        <p className="text-xs text-red-400">
-                          {scene.videoGenerationError}
-                        </p>
-                      )}
-                      {scene.videos.map((v, j) => (
-                        <video
-                          key={j}
-                          src={v.url}
-                          controls
-                          className="w-full max-h-32 rounded"
-                        />
-                      ))}
-                    </div>
+                          {scene.isGeneratingImage && scene.images.length === 0 && (
+                            <div className="h-28 bg-blue-500/5 rounded-lg flex flex-col items-center justify-center gap-2 border border-dashed border-blue-500/20 animate-pulse">
+                              <Loader2 size={20} className="animate-spin text-blue-400" />
+                              <span className="text-[10px] text-muted-foreground">Generating image...</span>
+                            </div>
+                          )}
+                          <div className="flex gap-1.5 flex-wrap">
+                            {scene.images.map((img, j) => (
+                              <div key={j} className="relative group">
+                                <img
+                                  src={img}
+                                  alt={`Scene ${i + 1} image ${j}`}
+                                  onClick={() =>
+                                    dispatch({ type: "UPDATE_SCENE", id: scene.id, patch: { selectedImageForVideo: img } })
+                                  }
+                                  className={`h-24 rounded-md border-2 transition-all ${
+                                    scene.selectedImageForVideo === img
+                                      ? "border-emerald-500 ring-1 ring-emerald-500/30"
+                                      : "border-transparent hover:border-muted-foreground"
+                                  }`}
+                                />
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setPreviewModal({ type: "image", src: img }); }}
+                                  className="absolute top-1 right-1 p-1 bg-black/60 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <Maximize2 size={10} className="text-white" />
+                                </button>
+                                {scene.selectedImageForVideo === img && (
+                                  <div className="absolute bottom-1 left-1 text-[8px] bg-emerald-600 text-white px-1 rounded">
+                                    selected
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {scene.isGeneratingImage && scene.images.length > 0 && (
+                              <div className="h-24 w-16 bg-blue-500/5 rounded-md flex items-center justify-center border border-dashed border-blue-500/20">
+                                <Loader2 size={14} className="animate-spin text-blue-400" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
 
-                    {/* Audio column */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium">Audio</span>
-                        <button
-                          onClick={() => handleGenerateAudio(scene.id)}
-                          disabled={scene.isGeneratingAudio}
-                          className="text-xs px-2 py-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded flex items-center gap-1"
-                        >
-                          {scene.isGeneratingAudio ? (
-                            <Loader2 size={12} className="animate-spin" />
-                          ) : (
-                            <Volume2 size={12} />
+                        {/* ── Video Card ── */}
+                        <div className="border border-emerald-500/20 bg-emerald-500/5 rounded-lg p-3 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold flex items-center gap-1.5 text-emerald-400">
+                              <Video size={14} /> Videos
+                            </span>
+                            <button
+                              onClick={() => handleGenerateVideo(scene.id)}
+                              disabled={scene.isGeneratingVideo || !scene.selectedImageForVideo}
+                              className="text-xs px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-md flex items-center gap-1.5 font-medium"
+                            >
+                              {scene.isGeneratingVideo ? (
+                                <Loader2 size={12} className="animate-spin" />
+                              ) : (
+                                <Plus size={12} />
+                              )}
+                              {scene.isGeneratingVideo ? "Generating..." : "Generate"}
+                            </button>
+                          </div>
+                          {!scene.selectedImageForVideo && scene.images.length === 0 && (
+                            <p className="text-[10px] text-muted-foreground italic">Generate an image first, then select it</p>
                           )}
-                          Gen
-                        </button>
+                          {scene.videoGenerationError && (
+                            <p className="text-xs text-red-400 bg-red-500/10 rounded px-2 py-1">{scene.videoGenerationError}</p>
+                          )}
+                          {scene.isGeneratingVideo && scene.videos.length === 0 && (
+                            <div className="h-28 bg-emerald-500/5 rounded-lg flex flex-col items-center justify-center gap-2 border border-dashed border-emerald-500/20 animate-pulse">
+                              <Loader2 size={20} className="animate-spin text-emerald-400" />
+                              <span className="text-[10px] text-muted-foreground">Generating video...</span>
+                            </div>
+                          )}
+                          <div className="space-y-2">
+                            {scene.videos.map((v, j) => (
+                              <div key={j} className="relative group">
+                                <video src={v.url} controls className="w-full max-h-36 rounded-md" />
+                                <button
+                                  onClick={() => setPreviewModal({ type: "video", src: v.url })}
+                                  className="absolute top-1 right-1 p-1 bg-black/60 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <Maximize2 size={10} className="text-white" />
+                                </button>
+                              </div>
+                            ))}
+                            {scene.isGeneratingVideo && scene.videos.length > 0 && (
+                              <div className="h-20 bg-emerald-500/5 rounded-md flex items-center justify-center border border-dashed border-emerald-500/20">
+                                <Loader2 size={14} className="animate-spin text-emerald-400" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* ── Audio Card ── */}
+                        <div className="border border-purple-500/20 bg-purple-500/5 rounded-lg p-3 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold flex items-center gap-1.5 text-purple-400">
+                              <Volume2 size={14} /> Audio
+                            </span>
+                            <button
+                              onClick={() => handleGenerateAudio(scene.id)}
+                              disabled={scene.isGeneratingAudio}
+                              className="text-xs px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-md flex items-center gap-1.5 font-medium"
+                            >
+                              {scene.isGeneratingAudio ? (
+                                <Loader2 size={12} className="animate-spin" />
+                              ) : (
+                                <Plus size={12} />
+                              )}
+                              {scene.isGeneratingAudio ? "Generating..." : "Generate"}
+                            </button>
+                          </div>
+                          {scene.audioGenerationError && (
+                            <p className="text-xs text-red-400 bg-red-500/10 rounded px-2 py-1">{scene.audioGenerationError}</p>
+                          )}
+                          {scene.isGeneratingAudio && !scene.audioUrl && (
+                            <div className="h-16 bg-purple-500/5 rounded-lg flex items-center justify-center gap-2 border border-dashed border-purple-500/20 animate-pulse">
+                              <Loader2 size={14} className="animate-spin text-purple-400" />
+                              <span className="text-[10px] text-muted-foreground">Generating audio...</span>
+                            </div>
+                          )}
+                          {scene.audioUrl && (
+                            <audio src={scene.audioUrl} controls className="w-full" />
+                          )}
+                          {!scene.audioUrl && !scene.isGeneratingAudio && !scene.audioGenerationError && (
+                            <p className="text-[10px] text-muted-foreground italic">No audio yet</p>
+                          )}
+                        </div>
                       </div>
-                      {scene.audioGenerationError && (
-                        <p className="text-xs text-red-400">
-                          {scene.audioGenerationError}
-                        </p>
-                      )}
-                      {scene.audioUrl && (
-                        <audio
-                          src={scene.audioUrl}
-                          controls
-                          className="w-full"
-                        />
-                      )}
                     </div>
-                  </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
+          </div>
+        )}
+
+        {/* ── Fullscreen Preview Modal ── */}
+        {previewModal && (
+          <div
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+            onClick={() => setPreviewModal(null)}
+          >
+            <button
+              onClick={() => setPreviewModal(null)}
+              className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+            >
+              <X size={20} className="text-white" />
+            </button>
+            {previewModal.type === "image" ? (
+              <img
+                src={previewModal.src}
+                alt="Preview"
+                className="max-w-full max-h-[90vh] rounded-lg object-contain"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <video
+                src={previewModal.src}
+                controls
+                autoPlay
+                className="max-w-full max-h-[90vh] rounded-lg"
+                onClick={(e) => e.stopPropagation()}
+              />
+            )}
+            <a
+              href={previewModal.src}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-md text-sm transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Download size={14} /> Download
+            </a>
           </div>
         )}
 

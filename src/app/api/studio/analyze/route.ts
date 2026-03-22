@@ -9,8 +9,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing frames, fps, or duration" }, { status: 400 });
     }
 
-    // Hard cap at 10 frames — gemini service will also sample down
-    const limitedFrames = frames.slice(0, 10);
+    // Evenly sample up to 30 frames across the full video for complete coverage
+    const maxFrames = 30;
+    const limitedFrames = frames.length <= maxFrames
+      ? frames
+      : Array.from({ length: maxFrames }, (_, i) =>
+          frames[Math.floor((i / maxFrames) * frames.length)]
+        );
     const analysis = await analyzeVideoFrames(limitedFrames, fps, duration);
     return NextResponse.json(analysis);
   } catch (e: unknown) {
