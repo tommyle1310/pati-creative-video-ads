@@ -183,7 +183,7 @@ export default function DashboardPage() {
             <span className="text-[28px] drop-shadow-[0_0_12px_rgba(0,200,150,0.4)]">🔬</span>
             <div>
               <h1 className="text-xl font-extrabold tracking-tight bg-gradient-to-br from-foreground to-emerald-400 bg-clip-text text-transparent">
-                Project Antigravity
+                Enhanced AI Factory
               </h1>
               <p className="text-xs text-muted-foreground font-normal mt-0.5">
                 Bulk-First Ad Intelligence · FusiForce / Wellness Nest
