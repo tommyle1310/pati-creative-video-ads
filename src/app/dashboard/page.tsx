@@ -14,7 +14,7 @@ import {
   CardDescription,
   CardContent,
 } from "@/components/ui/card";
-import { Rocket, Zap, BarChart3, RefreshCw, ExternalLink } from "lucide-react";
+import { Rocket, Zap, BarChart3, RefreshCw, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 
 interface CrawlStatus {
   jobId: string;
@@ -48,6 +48,8 @@ export default function DashboardPage() {
   const [showSummary, setShowSummary] = useState(false);
   const [resyncStatus, setResyncStatus] = useState<"idle" | "syncing" | "done" | "error">("idle");
   const [resyncMessage, setResyncMessage] = useState("");
+  const [winnersCollapsed, setWinnersCollapsed] = useState(false);
+  const [explorerCollapsed, setExplorerCollapsed] = useState(false);
 
   const refreshDbInfo = useCallback(async () => {
     try {
@@ -305,31 +307,61 @@ export default function DashboardPage() {
         {/* Top Winners */}
         <Card>
           <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-              🏆 Top Winners Intelligence
-            </CardTitle>
-            <CardDescription>
-              Select top N ads by AdScore with brand, pattern, and market diversity constraints
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col space-y-1.5">
+                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                  🏆 Top Winners Intelligence
+                </CardTitle>
+                <CardDescription>
+                  Select top N ads by AdScore with brand, pattern, and market diversity constraints
+                </CardDescription>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setWinnersCollapsed(!winnersCollapsed)}
+                className="text-muted-foreground hover:text-foreground shrink-0"
+              >
+                {winnersCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                <span className="ml-1 text-xs">{winnersCollapsed ? "Expand" : "Collapse"}</span>
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent>
-            <TopWinners />
-          </CardContent>
+          {!winnersCollapsed && (
+            <CardContent>
+              <TopWinners />
+            </CardContent>
+          )}
         </Card>
 
         {/* Ad Explorer */}
         <Card>
           <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-              🔍 Ad Explorer
-            </CardTitle>
-            <CardDescription>
-              Filter by longevity, iterations, pattern, market — sort by any metric
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col space-y-1.5">
+                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
+                  🔍 Ad Explorer
+                </CardTitle>
+                <CardDescription>
+                  Filter by longevity, iterations, pattern, market — sort by any metric
+                </CardDescription>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExplorerCollapsed(!explorerCollapsed)}
+                className="text-muted-foreground hover:text-foreground shrink-0"
+              >
+                {explorerCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                <span className="ml-1 text-xs">{explorerCollapsed ? "Expand" : "Collapse"}</span>
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent>
-            <AdExplorer />
-          </CardContent>
+          {!explorerCollapsed && (
+            <CardContent>
+              <AdExplorer />
+            </CardContent>
+          )}
         </Card>
 
         {/* Single Ad Analyzer */}

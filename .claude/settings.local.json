@@ -38,7 +38,11 @@
       "Bash(ls d:/jobs/pati/creative-project/postcss.config.*)",
       "Bash(npm ls:*)",
       "Bash(ls d:/jobs/pati/creative-project/next.config.*)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(for route:*)",
+      "Bash(do echo:*)",
+      "Read(//d/jobs/pati/creative-project/src/app/api/studio/$route/**)",
+      "Bash(done)"
     ]
   }
 }

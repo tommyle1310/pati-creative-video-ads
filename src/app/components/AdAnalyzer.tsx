@@ -2,6 +2,9 @@
 
 import { useState, useRef } from "react";
 import styles from "./AdAnalyzer.module.css";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface AnalysisResult {
   success: boolean;
@@ -126,15 +129,18 @@ export default function AdAnalyzer() {
       {/* URL Input */}
       {mode === "url" && (
         <div className={styles.inputRow}>
-          <input
+          <Input
             type="text"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="Paste Meta Ad Library URL or direct video URL..."
-            className={styles.urlInput}
+            className={cn(
+              styles.urlInput,
+              'border-1 border-white ring-1 ring-white'
+            )}
             onKeyDown={(e) => e.key === "Enter" && handleAnalyzeUrl()}
           />
-          <button
+          <Button
             onClick={handleAnalyzeUrl}
             disabled={loading || !url.trim()}
             className={styles.analyzeBtn}
@@ -144,7 +150,7 @@ export default function AdAnalyzer() {
             ) : (
               "Analyze"
             )}
-          </button>
+          </Button>
         </div>
       )}
 

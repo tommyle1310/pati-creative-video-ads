@@ -4,9 +4,24 @@
 import { GoogleGenAI, Modality, type Part } from "@google/genai";
 import type { VideoAnalysis, StoryboardScene, RollType } from "./types";
 import { createDefaultScene } from "./types";
+import fs from "fs";
+import path from "path";
 
 function getClient() {
-  const key = process.env.GEMINI_API_KEY;
+  let key = process.env.GEMINI_API_KEY;
+  // On cold start, check if a custom key was saved in settings.json
+  if (!key) {
+    try {
+      const settingsPath = path.join(process.cwd(), ".tmp", "settings.json");
+      if (fs.existsSync(settingsPath)) {
+        const settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+        if (settings.geminiApiKey) {
+          key = settings.geminiApiKey;
+          process.env.GEMINI_API_KEY = key; // cache for subsequent calls
+        }
+      }
+    } catch {}
+  }
   if (!key) throw new Error("GEMINI_API_KEY not set");
   return new GoogleGenAI({ apiKey: key });
 }
@@ -320,12 +335,13 @@ const ANALYSIS_SCHEMA = {
 export async function analyzeVideoFrames(
   frames: string[],
   fps: number,
-  duration: number
+  duration: number,
+  audioBase64?: string
 ): Promise<VideoAnalysis> {
   const ai = getClient();
 
-  // Send up to 30 evenly-sampled frames for accurate scene detection
-  const maxFrames = 30;
+  // Send all frames (up to 60) for full video coverage
+  const maxFrames = 60;
   const sampled =
     frames.length <= maxFrames
       ? frames
@@ -339,14 +355,26 @@ export async function analyzeVideoFrames(
     return (frameIdx / Math.max(fps, 0.5)).toFixed(1);
   });
 
+  const hasAudio = !!audioBase64;
+
   const parts: Part[] = [
     {
       text: `Analyze these ${sampled.length} frames from a ${duration.toFixed(1)}-second video, captured at ${fps.toFixed(1)} FPS.
 Frame timestamps: ${frameTimestamps.map((t, i) => `Frame ${i + 1} = ${t}s`).join(", ")}.
+${hasAudio ? "\nAUDIO TRACK INCLUDED: The audio from the original video is attached below. Use it to extract the EXACT spoken words (voiceover/dialogue) for each scene. Transcribe the audio precisely — do NOT guess from visual text overlays alone. Match each spoken segment to its corresponding scene timestamp." : "\nNo audio track available — extract speech from visible text overlays only."}
 
-IMPORTANT: This is a video AD — scenes change rapidly (every 1-4 seconds). Cut scenes at every visual change. A 50-second ad should have 12-25+ scenes. Extract the COMPLETE voiceover/text for each scene.`,
+IMPORTANT: This is a video AD — scenes change rapidly (every 1-4 seconds). Cut scenes at every visual change. The full video is ${duration.toFixed(1)} seconds — make sure you cover ALL of it from 0s to ${duration.toFixed(1)}s. A ${Math.round(duration)}-second ad should have ${Math.max(8, Math.round(duration / 3))}-${Math.round(duration / 1.5)}+ scenes. Extract the COMPLETE voiceover/text for each scene.`,
     },
   ];
+
+  // Add audio track FIRST if available (Gemini processes audio for transcription)
+  if (hasAudio) {
+    parts.push({
+      inlineData: { mimeType: "audio/mp3", data: audioBase64 },
+    });
+  }
+
+  // Then add all visual frames
   for (const frame of sampled) {
     const base64 = frame.includes(",") ? frame.split(",")[1] : frame;
     parts.push({ inlineData: { mimeType: "image/jpeg", data: base64 } });
@@ -519,12 +547,20 @@ export async function generateClonedStoryboard(
     });
   }
 
+  // For many scenes, tell Gemini to keep prompts concise to avoid output truncation
+  const sceneCount = analysis.sceneBreakdown.length;
+  const conciseSuffix = sceneCount > 10
+    ? "\n\nIMPORTANT: This ad has many scenes. Keep each imagePrompt and videoPrompt to 300 words MAX. Write prompts as plain text paragraphs, NOT JSON objects. Prioritize the most impactful visual details."
+    : "\n\nWrite imagePrompt and videoPrompt as plain text paragraphs (not JSON objects).";
+  parts[0] = { text: (parts[0] as { text: string }).text + conciseSuffix };
+
   return callWithRetry(async (model) => {
     const response = await ai.models.generateContent({
       model,
       contents: { parts },
       config: {
         systemInstruction: CLONED_STORYBOARD_INSTRUCTION,
+        maxOutputTokens: 65536,
         responseMimeType: "application/json",
         responseSchema: {
           type: "OBJECT",
@@ -555,23 +591,59 @@ export async function generateClonedStoryboard(
       },
     });
 
-    const result = JSON.parse(response.text!.trim());
+    const raw = response.text!.trim();
+    let result: { scenes: Array<{
+      rollType?: string;
+      voiceoverScript: string;
+      voiceoverGuide: string;
+      imagePrompt: string | object;
+      videoPrompt: string | object;
+    }> };
+
+    try {
+      result = JSON.parse(raw);
+    } catch {
+      // Attempt to repair truncated JSON — find last complete scene object
+      const repaired = repairTruncatedScenesJson(raw);
+      result = JSON.parse(repaired);
+    }
+
     return result.scenes.map(
-      (s: {
-        rollType?: string;
-        voiceoverScript: string;
-        voiceoverGuide: string;
-        imagePrompt: string | object;
-        videoPrompt: string | object;
-      }) => createDefaultScene({
+      (s) => createDefaultScene({
         ...s,
-        // Gemini may return prompts as JSON objects — ensure they're stored as strings
         imagePrompt: typeof s.imagePrompt === "object" ? JSON.stringify(s.imagePrompt, null, 2) : s.imagePrompt,
         videoPrompt: typeof s.videoPrompt === "object" ? JSON.stringify(s.videoPrompt, null, 2) : s.videoPrompt,
         rollType: (["aroll", "broll", "croll"].includes(s.rollType || "") ? s.rollType : undefined) as RollType | undefined,
       })
     );
   });
+}
+
+/**
+ * Attempts to repair a truncated JSON response from Gemini.
+ * Finds the last complete object in the scenes array and closes the JSON.
+ */
+function repairTruncatedScenesJson(raw: string): string {
+  // Find the last complete "videoPrompt" value (last fully closed scene)
+  // Strategy: find all '}' positions and try to parse with closing brackets
+  const lastCloseBrace = raw.lastIndexOf("}");
+  if (lastCloseBrace === -1) throw new Error("Cannot repair JSON: no closing brace found");
+
+  // Try progressively from the end to find valid JSON
+  for (let i = lastCloseBrace; i >= 0; i--) {
+    if (raw[i] !== "}") continue;
+    const candidate = raw.slice(0, i + 1) + "]}";
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed.scenes && Array.isArray(parsed.scenes) && parsed.scenes.length > 0) {
+        console.warn(`[Gemini] Repaired truncated storyboard JSON — recovered ${parsed.scenes.length} scenes`);
+        return candidate;
+      }
+    } catch {
+      continue;
+    }
+  }
+  throw new Error("Cannot repair truncated JSON response from Gemini. Try again with fewer scenes.");
 }
 
 export async function generateTTS(

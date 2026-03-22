@@ -9,6 +9,7 @@ import {
   Columns2,
   FileText,
   Clapperboard,
+  Settings,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { href: "/saved", label: "Saved", Icon: Bookmark },
   { href: "/compare", label: "Compare", Icon: Columns2 },
   { href: "/briefs", label: "Briefs", Icon: FileText },
+  { href: "/settings", label: "Settings", Icon: Settings },
 ];
 
 export default function Sidebar() {

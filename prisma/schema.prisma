@@ -168,3 +168,40 @@ model Brief {
   @@index([targetProduct])
   @@index([isArchived])
 }
+
+model StudioProject {
+  id        String   @id @default(cuid())
+  name      String
+  step      Int      @default(1)
+  stateJson Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+model StudioFolder {
+  id        String         @id @default(cuid())
+  name      String
+  parentId  String?
+  parent    StudioFolder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  StudioFolder[] @relation("FolderTree")
+  assets    StudioAsset[]
+  createdAt DateTime       @default(now())
+
+  @@index([parentId])
+}
+
+model StudioAsset {
+  id        String        @id @default(cuid())
+  type      String        // "image" | "video"
+  url       String
+  name      String
+  folderId  String?
+  folder    StudioFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  metadata  Json?
+  createdAt DateTime      @default(now())
+
+  @@index([folderId])
+  @@index([type])
+}

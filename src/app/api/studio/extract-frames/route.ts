@@ -180,11 +180,34 @@ export async function POST(req: NextRequest) {
       return `data:image/jpeg;base64,${buf.toString("base64")}`;
     });
 
+    // Extract audio track as MP3 for speech transcription
+    let audioBase64: string | null = null;
+    const audioPath = path.join(jobDir, "audio.mp3");
+    try {
+      await run("ffmpeg", [
+        "-i", videoPath,
+        "-vn",             // no video
+        "-acodec", "libmp3lame",
+        "-ar", "16000",    // 16kHz mono — sufficient for speech, small file
+        "-ac", "1",
+        "-b:a", "64k",
+        "-y", audioPath,
+      ], 60000);
+      if (fs.existsSync(audioPath) && fs.statSync(audioPath).size > 500) {
+        const audioBuf = fs.readFileSync(audioPath);
+        audioBase64 = audioBuf.toString("base64");
+      }
+    } catch {
+      // Video may have no audio track — continue without it
+      console.warn("[studio/extract-frames] No audio track or extraction failed");
+    }
+
     return NextResponse.json({
       frames,
       duration,
       format,
       fps: frames.length / Math.max(duration, 1),
+      audio: audioBase64,
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Frame extraction failed";

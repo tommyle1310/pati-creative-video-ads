@@ -98,7 +98,8 @@ export default function CrawlLauncher({ onCrawlStarted, disabled }: Props) {
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           placeholder="creatine gummies"
-          className="max-w-[360px] bg-muted/50 border-border text-foreground placeholder:text-muted-foreground"
+          disabled
+          className="max-w-[360px]  bg-muted/50 border-border text-foreground placeholder:text-muted-foreground"
         />
       </div>
 
