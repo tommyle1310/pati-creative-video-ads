@@ -107,7 +107,7 @@ export function SaveAssetButton({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="p-1 bg-black/60 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+        className="p-1 bg-black/60 rounded transition-opacity"
         title="Save to library"
       >
         <Save size={10} className="text-white" />

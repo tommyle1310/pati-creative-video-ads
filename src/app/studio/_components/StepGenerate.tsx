@@ -339,10 +339,10 @@ export function StepGenerate() {
                                 type: "image",
                               })
                             }
-                            className="text-[10px] px-2 py-1.5 bg-muted hover:bg-muted/80 rounded-md flex items-center gap-1 text-muted-foreground"
+                            className="text-[10px] px-2 py-1.5 border-1 border-slate-700 bg-muted hover:bg-muted/80 rounded-md flex items-center gap-1 text-muted-foreground"
                             title="Use saved image"
                           >
-                            <FolderOpen size={10} /> Saved
+                            <FolderOpen size={10} /> Browse saved imgs
                           </button>
                           <button
                             onClick={() => handleGenerateImage(scene.id)}
@@ -393,7 +393,7 @@ export function StepGenerate() {
                                   patch: { selectedImageForVideo: img },
                                 })
                               }
-                              className={`h-24 rounded-md border-2 transition-all ${
+                              className={`h-48 rounded-md border-2 transition-all ${
                                 scene.selectedImageForVideo === img
                                   ? "border-emerald-500 ring-1 ring-emerald-500/30"
                                   : "border-transparent hover:border-muted-foreground"
@@ -405,7 +405,7 @@ export function StepGenerate() {
                                   e.stopPropagation();
                                   setPreviewModal({ type: "image", src: img });
                                 }}
-                                className="p-1 bg-black/60 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="p-1 bg-black/60 rounded  transition-opacity"
                               >
                                 <Maximize2
                                   size={10}
@@ -452,10 +452,10 @@ export function StepGenerate() {
                                 type: "video",
                               })
                             }
-                            className="text-[10px] px-2 py-1.5 bg-muted hover:bg-muted/80 rounded-md flex items-center gap-1 text-muted-foreground"
+                            className="text-[10px] px-2 py-1.5 border-1 border-slate-700 bg-muted hover:bg-muted/80 rounded-md flex items-center gap-1 text-muted-foreground"
                             title="Use saved video"
                           >
-                            <FolderOpen size={10} /> Saved
+                            <FolderOpen size={10} /> Browse saved vids
                           </button>
                           <button
                             onClick={() => handleGenerateVideo(scene.id)}
@@ -518,7 +518,7 @@ export function StepGenerate() {
                                     src: v.url,
                                   })
                                 }
-                                className="p-1 bg-black/60 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="p-1 bg-black/60 rounded  transition-opacity"
                               >
                                 <Maximize2
                                   size={10}
