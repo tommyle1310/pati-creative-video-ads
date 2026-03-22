@@ -20,6 +20,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useStudio } from "../_state/context";
 import {
   useProjectPersistence,
@@ -137,60 +143,91 @@ export function SaveProjectButton() {
 
   return (
     <>
-      <div className="flex items-center gap-1">
-        {/* Current project indicator */}
-        {s.currentProjectName && (
-          <span className="text-[10px] text-muted-foreground mr-1 truncate max-w-[120px]">
-            {s.currentProjectName}
-          </span>
-        )}
-
-        {/* New */}
-        <button
-          onClick={handleNew}
-          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-          title="New project"
-        >
-          <FilePlus size={16} />
-        </button>
-
-        {/* Open */}
-        <button
-          onClick={handleOpenDialog}
-          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-          title="Open project"
-        >
-          <FolderOpen size={16} />
-        </button>
-
-        {/* Save */}
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-muted hover:bg-muted/80 rounded-md transition-colors disabled:opacity-50"
-          title={s.currentProjectId ? "Save project" : "Save as new project"}
-        >
-          {saving ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : saved ? (
-            <Check size={14} className="text-emerald-400" />
-          ) : (
-            <Save size={14} />
+      <TooltipProvider delayDuration={300}>
+        <div className="flex items-center gap-1.5">
+          {/* Current project indicator */}
+          {s.currentProjectName && (
+            <span className="text-[10px] text-muted-foreground mr-1 truncate max-w-[120px]">
+              {s.currentProjectName}
+            </span>
           )}
-          {saved ? "Saved" : "Save"}
-        </button>
 
-        {/* Save As (only if already saved) */}
-        {s.currentProjectId && (
-          <button
-            onClick={handleSaveAs}
-            className="text-[10px] px-2 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-            title="Save as new project"
-          >
-            Save As
-          </button>
-        )}
-      </div>
+          {/* New */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={handleNew}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+              >
+                <FilePlus size={14} />
+                New
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Start a new project from scratch
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Open */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={handleOpenDialog}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+              >
+                <FolderOpen size={14} />
+                Open
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Open a previously saved project
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Save */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-muted hover:bg-muted/80 rounded-md transition-colors disabled:opacity-50"
+              >
+                {saving ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : saved ? (
+                  <Check size={14} className="text-emerald-400" />
+                ) : (
+                  <Save size={14} />
+                )}
+                {saved ? "Saved" : "Save"}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {s.currentProjectId
+                ? "Save changes to current project"
+                : "Save as a new project"}
+            </TooltipContent>
+          </Tooltip>
+
+          {/* Save As (only if already saved) */}
+          {s.currentProjectId && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleSaveAs}
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                >
+                  <Save size={14} />
+                  Save As
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                Save a copy with a new name
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      </TooltipProvider>
 
       {/* Save Dialog */}
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>

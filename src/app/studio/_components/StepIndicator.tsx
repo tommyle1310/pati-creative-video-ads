@@ -14,22 +14,23 @@ export function StepIndicator() {
         const stepNum = i + 1;
         const isCurrent = s.step === stepNum;
         const isDone = s.step > stepNum;
+        const isReachable = stepNum <= s.maxStepReached;
         return (
           <div key={st.label} className="flex items-center">
             <button
               onClick={() =>
-                stepNum <= s.step &&
+                isReachable &&
                 dispatch({ type: "SET_STEP", step: stepNum })
               }
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 isCurrent
                   ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
-                  : isDone
+                  : isReachable
                   ? "bg-muted text-foreground cursor-pointer hover:bg-muted/80"
                   : "text-muted-foreground cursor-default"
               }`}
             >
-              {isDone ? (
+              {isDone && isReachable ? (
                 <Check size={14} className="text-emerald-400" />
               ) : (
                 <StepIcon size={14} />

@@ -66,16 +66,21 @@ Label each scene with its marketing purpose AND its visual roll type:
 Output: JSON object with sceneBreakdown[] and musicAndPacing (include BPM estimate, energy level, genre).`;
 
 const CLONED_SCRIPT_INSTRUCTION = `You are an expert scriptwriter for high-converting short-form video ads.
-Create a NEW multi-scene script for a NEW product that strictly follows the structure of the original ad.
+Create a NEW multi-scene script for a NEW product that CLONES the structure and pacing of the original ad.
 
 CRITICAL RULES:
 - You MUST output EXACTLY the same number of scenes as the original ad's sceneBreakdown.
 - Each scene in your output corresponds 1:1 to a scene in the original analysis.
-- Each scene MUST have 2-4 sentences of spoken dialogue/voiceover (15-30 words minimum per scene).
+- **MATCH THE ORIGINAL'S WORD COUNT PER SCENE.** This is the most important rule:
+  - If the original scene has 0 words (silent B-Roll/C-Roll), your scene MUST also have 0 words — set dialogue to "" (empty string).
+  - If the original scene has 3-5 words (short hook), yours should have 3-8 words max.
+  - If the original scene has 10-20 words, yours should have a similar amount.
+  - NEVER inflate a short scene into a long one. Count the words in the original speech field and stay within ±30%.
 - Follow the same sequence of scene types (problem → product → benefit → CTA etc.)
 - Match the original's pacing and rhythm described in musicAndPacing.
 - Write for the NEW product, NEW audience, NEW big idea — not the original.
 - Make the script sound natural, conversational, and authentic (like a real person talking on camera).
+- Silent scenes (B-Roll product shots, C-Roll visuals) STAY SILENT — do not add voiceover where the original had none.
 
 ## META ADS AI STACK — CREATIVE STRATEGY CONTEXT
 Meta's Andromeda retrieval system uses creative embeddings to determine who sees ads. Creative diversity is
@@ -495,10 +500,32 @@ export async function generateClonedScript(
     ? `\n\n## CREATIVE STRATEGY (apply these across the entire script)\n${strategyLines.join("\n")}`
     : "";
 
+  // Calculate word counts per scene to guide Gemini
+  const sceneWordCounts = analysis.sceneBreakdown.map((sc) => {
+    // Strip "VO:" / "TEXT:" / "SUBTITLES:" prefixes and count real words
+    const speech = (sc.speech || "")
+      .replace(/\b(VO|TEXT|SUBTITLES):\s*/gi, "")
+      .replace(/\bNone\b/gi, "")
+      .trim();
+    return speech ? speech.split(/\s+/).length : 0;
+  });
+  const totalOriginalWords = sceneWordCounts.reduce((a, b) => a + b, 0);
+
+  const wordCountGuide = analysis.sceneBreakdown
+    .map((sc, i) => {
+      const wc = sceneWordCounts[i];
+      return `  Scene ${sc.scene_id}: ~${wc} words${wc === 0 ? " (SILENT — keep empty)" : ""}`;
+    })
+    .join("\n");
+
   const promptText = `**Original Ad has ${analysis.sceneBreakdown.length} scenes. You MUST write exactly ${analysis.sceneBreakdown.length} scenes.**
 
 **Original Scene Breakdown:**
 ${sceneList}
+
+**Word Count Per Scene (MATCH CLOSELY — do NOT inflate):**
+${wordCountGuide}
+Total original voiceover: ~${totalOriginalWords} words. Your script should be within ±30% of this total.
 
 **Music & Pacing:** ${analysis.musicAndPacing}
 
@@ -506,7 +533,7 @@ ${sceneList}
 **NEW Product Info:** ${productInfo || "Not provided."}
 **NEW Target Audience:** ${targetAudience || "Not provided."}${strategyBlock}
 
-Write a complete ${analysis.sceneBreakdown.length}-scene script. Each scene needs 2-4 sentences of natural spoken dialogue.`;
+Write a complete ${analysis.sceneBreakdown.length}-scene script. Match the original word count per scene — silent scenes stay silent, short hooks stay short.`;
 
   const parts: Part[] = [
     { text: promptText },
@@ -547,7 +574,7 @@ Write a complete ${analysis.sceneBreakdown.length}-scene script. Each scene need
                 type: "OBJECT",
                 properties: {
                   sceneType: { type: "STRING", description: "Marketing purpose (problem, product, benefit, CTA, etc.)" },
-                  dialogue: { type: "STRING", description: "Full voiceover/spoken text for this scene. 2-4 sentences minimum." },
+                  dialogue: { type: "STRING", description: "Voiceover/spoken text for this scene. Match the original word count. Empty string for silent scenes." },
                   direction: { type: "STRING", description: "Brief visual/tone direction note" },
                 },
                 required: ["sceneType", "dialogue", "direction"],

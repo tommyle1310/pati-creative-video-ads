@@ -10,6 +10,7 @@ export type { VideoAnalysis, StoryboardScene, ScriptScene };
 
 export interface StudioState {
   step: number;
+  maxStepReached: number;
   // Step 1
   sourceType: "db" | "upload" | null;
   selectedAdId: string | null;

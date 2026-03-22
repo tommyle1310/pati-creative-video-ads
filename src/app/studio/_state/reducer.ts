@@ -4,7 +4,11 @@ import { initialState } from "./initial";
 export function reducer(state: StudioState, action: Action): StudioState {
   switch (action.type) {
     case "SET_STEP":
-      return { ...state, step: action.step };
+      return {
+        ...state,
+        step: action.step,
+        maxStepReached: Math.max(state.maxStepReached, action.step),
+      };
     case "SET_SOURCE_DB":
       return {
         ...state,
@@ -82,8 +86,10 @@ export function reducer(state: StudioState, action: Action): StudioState {
         productVidtoryUrl: action.product ?? state.productVidtoryUrl,
         creatorVidtoryUrl: action.creator ?? state.creatorVidtoryUrl,
       };
-    case "LOAD_PROJECT":
-      return { ...initialState, ...action.state };
+    case "LOAD_PROJECT": {
+      const loaded = { ...initialState, ...action.state };
+      return { ...loaded, maxStepReached: loaded.step };
+    }
     case "CLEAR_SOURCE":
       return {
         ...state,
@@ -98,6 +104,7 @@ export function reducer(state: StudioState, action: Action): StudioState {
       return {
         ...state,
         step: 1,
+        maxStepReached: 1,
         frames: [],
         analysis: null,
         isAnalyzing: false,

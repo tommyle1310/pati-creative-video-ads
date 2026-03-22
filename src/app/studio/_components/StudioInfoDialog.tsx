@@ -19,6 +19,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const PIPELINE_STEPS = [
   {
@@ -97,13 +103,22 @@ export function StudioInfoDialog() {
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-        title="How it works"
-      >
-        <Info size={18} />
-      </button>
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => setOpen(true)}
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+            >
+              <Info size={14} />
+              How It Works
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            Learn the 7-step pipeline from source video to final ad
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
       
 

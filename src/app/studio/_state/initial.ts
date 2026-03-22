@@ -2,6 +2,7 @@ import type { StudioState } from "./types";
 
 export const initialState: StudioState = {
   step: 1,
+  maxStepReached: 1,
   sourceType: null,
   selectedAdId: null,
   selectedAdVideoUrl: null,
