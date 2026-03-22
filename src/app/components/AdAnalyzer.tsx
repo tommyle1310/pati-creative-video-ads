@@ -136,7 +136,7 @@ export default function AdAnalyzer() {
             placeholder="Paste Meta Ad Library URL or direct video URL..."
             className={cn(
               styles.urlInput,
-              'border-1 border-white ring-1 ring-white'
+              'border-1 border-white ring-1 ring-slate-700'
             )}
             onKeyDown={(e) => e.key === "Enter" && handleAnalyzeUrl()}
           />

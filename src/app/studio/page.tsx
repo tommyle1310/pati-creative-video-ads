@@ -13,12 +13,14 @@ import { StepPreview } from "./_components/StepPreview";
 import { NavigationButtons } from "./_components/NavigationButtons";
 import { SaveProjectButton } from "./_components/SaveProjectButton";
 import { StudioInfoDialog } from "./_components/StudioInfoDialog";
+import { AnnouncementDialog } from "../components/AnnouncementDialog";
 
 function StudioContent() {
   const { s } = useStudio();
 
   return (
     <div className="min-h-screen p-6 space-y-6">
+      <AnnouncementDialog />
       {/* Header */}
       <div className="flex items-center gap-3">
         <Clapperboard size={28} className="text-emerald-400" />

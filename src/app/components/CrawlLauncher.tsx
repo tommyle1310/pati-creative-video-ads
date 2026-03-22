@@ -121,13 +121,15 @@ export default function CrawlLauncher({ onCrawlStarted, disabled }: Props) {
       {/* Submit */}
       <Button
         type="submit"
-        disabled={disabled || loading || selectedMarkets.length === 0}
-        className="max-w-[240px] bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-bold shadow-[0_4px_14px_rgba(0,200,150,0.3)] hover:shadow-[0_6px_20px_rgba(0,200,150,0.4)] hover:-translate-y-0.5 transition-all"
+        disabled
+        // disabled={disabled || loading || selectedMarkets.length === 0}
+        className="w-fit bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-bold shadow-[0_4px_14px_rgba(0,200,150,0.3)] hover:shadow-[0_6px_20px_rgba(0,200,150,0.4)] hover:-translate-y-0.5 transition-all"
       >
         {loading ? (
           <span className="w-[18px] h-[18px] border-2 border-white/30 border-t-white rounded-full animate-spin" />
         ) : (
-          "🔬 Start Crawl"
+          // "🔬 Start Crawl"
+          "Temporary disabled (hết quota apify rùi 🥲)"
         )}
       </Button>
     </form>

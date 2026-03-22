@@ -15,6 +15,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Rocket, Zap, BarChart3, RefreshCw, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { AnnouncementDialog } from "../components/AnnouncementDialog";
 
 interface CrawlStatus {
   jobId: string;
@@ -174,6 +175,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <AnnouncementDialog />
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border/40 bg-background/85 backdrop-blur-xl">
         <div className="max-w-[1280px] mx-auto px-6 py-4 flex items-center justify-between">
