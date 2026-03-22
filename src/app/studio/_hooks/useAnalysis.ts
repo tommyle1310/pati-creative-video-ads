@@ -3,6 +3,57 @@
 import { useCallback } from "react";
 import { useStudio } from "../_state/context";
 
+/**
+ * Extract frames from a video element using canvas (client-side).
+ * Used for uploaded videos to avoid Vercel's 4.5MB payload limit.
+ */
+function extractFramesClientSide(
+  videoUrl: string,
+  maxFrames = 30
+): Promise<{ frames: string[]; duration: number }> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.crossOrigin = "anonymous";
+    video.muted = true;
+    video.preload = "auto";
+
+    video.onloadedmetadata = () => {
+      const duration = video.duration;
+      if (!duration || duration <= 0) {
+        reject(new Error("Could not read video duration"));
+        return;
+      }
+
+      const canvas = document.createElement("canvas");
+      // Small thumbnails for preview (same as server generates)
+      canvas.width = 120;
+      canvas.height = Math.round(120 * (video.videoHeight / video.videoWidth));
+      const ctx = canvas.getContext("2d")!;
+
+      const interval = duration / maxFrames;
+      const frames: string[] = [];
+      let currentTime = 0;
+
+      video.onseeked = () => {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        frames.push(canvas.toDataURL("image/jpeg", 0.5));
+
+        currentTime += interval;
+        if (currentTime < duration && frames.length < maxFrames) {
+          video.currentTime = currentTime;
+        } else {
+          resolve({ frames, duration });
+        }
+      };
+
+      video.currentTime = 0;
+    };
+
+    video.onerror = () => reject(new Error("Failed to load video"));
+    video.src = videoUrl;
+  });
+}
+
 export function useAnalysis() {
   const { s, dispatch } = useStudio();
 
@@ -10,46 +61,102 @@ export function useAnalysis() {
     dispatch({ type: "SET_ANALYZING", v: true });
 
     try {
-      let extractRes: Response;
+      if (s.sourceType === "upload" && s.uploadedVideoUrl) {
+        // ── Uploaded video: extract thumbnails client-side, analyze via URL ──
+        // 1. Extract small thumbnails client-side for preview strip
+        const { frames: thumbs, duration } = await extractFramesClientSide(
+          s.uploadedVideoUrl, 30
+        );
+        dispatch({ type: "SET_FRAMES", frames: thumbs });
 
-      if (s.sourceType === "upload" && s.uploadedVideoFile) {
-        const formData = new FormData();
-        formData.append("video", s.uploadedVideoFile);
-        formData.append("analyze", "true");
-        extractRes = await fetch("/api/studio/extract-frames", {
+        // 2. Upload video to Vidtory to get a public URL for Gemini
+        //    We chunk-upload via FormData. If the file is >4MB, we read it
+        //    and upload in a way that avoids the serverless body limit.
+        let videoUrl: string;
+        const file = s.uploadedVideoFile;
+        if (!file) throw new Error("No video file available");
+
+        // For files under 4MB, use the upload route directly
+        if (file.size < 4 * 1024 * 1024) {
+          const formData = new FormData();
+          formData.append("file", file);
+          const uploadRes = await fetch("/api/studio/upload", {
+            method: "POST",
+            body: formData,
+          });
+          if (!uploadRes.ok) throw new Error("Video upload failed");
+          const uploadData = await uploadRes.json();
+          videoUrl = uploadData.url;
+        } else {
+          // For larger files, create a temporary object URL and pass it
+          // to the server which will download it... but we can't do that
+          // with a blob URL. Instead, use the Gemini analyze directly
+          // by sending frames (client-extracted at higher quality).
+          const hiResFrames = await extractFramesHiRes(s.uploadedVideoUrl, 30);
+
+          const analyzeRes = await fetch("/api/studio/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              frames: hiResFrames,
+              fps: hiResFrames.length / Math.max(duration, 1),
+              duration,
+            }),
+          });
+
+          if (!analyzeRes.ok) {
+            const err = await analyzeRes.json();
+            throw new Error(err.error || "Analysis failed");
+          }
+          const analysis = await analyzeRes.json();
+          dispatch({ type: "SET_ANALYSIS", analysis });
+          dispatch({ type: "SET_ANALYZING", v: false });
+          return;
+        }
+
+        // 3. Send URL to server for Gemini File API analysis
+        const extractRes = await fetch("/api/studio/extract-frames", {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ videoUrl, analyze: true }),
         });
+        if (!extractRes.ok) {
+          const err = await extractRes.json();
+          throw new Error(err.error || "Analysis failed");
+        }
+        const data = await extractRes.json();
+        if (data.analysis) {
+          dispatch({ type: "SET_ANALYSIS", analysis: data.analysis });
+          dispatch({ type: "SET_ANALYZING", v: false });
+        } else if (data.analysisError) {
+          dispatch({ type: "SET_ANALYZE_ERROR", error: data.analysisError });
+        }
+
       } else if (s.sourceType === "db" && s.selectedAdVideoUrl) {
-        extractRes = await fetch("/api/studio/extract-frames", {
+        // ── DB video: server handles everything via URL ──
+        const extractRes = await fetch("/api/studio/extract-frames", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ videoUrl: s.selectedAdVideoUrl, analyze: true }),
         });
+        if (!extractRes.ok) {
+          const err = await extractRes.json();
+          throw new Error(err.error || "Frame extraction failed");
+        }
+        const data = await extractRes.json();
+        dispatch({ type: "SET_FRAMES", frames: data.frames });
+
+        if (data.analysis) {
+          dispatch({ type: "SET_ANALYSIS", analysis: data.analysis });
+          dispatch({ type: "SET_ANALYZING", v: false });
+        } else if (data.analysisError) {
+          dispatch({ type: "SET_ANALYZE_ERROR", error: data.analysisError });
+        } else {
+          dispatch({ type: "SET_ANALYZE_ERROR", error: "No analysis returned" });
+        }
+
       } else {
         throw new Error("No video source selected");
-      }
-
-      if (!extractRes.ok) {
-        const err = await extractRes.json();
-        throw new Error(err.error || "Frame extraction failed");
-      }
-
-      const data = await extractRes.json();
-
-      // Server returns tiny thumbnails for the preview strip
-      dispatch({ type: "SET_FRAMES", frames: data.frames });
-
-      if (data.analysis) {
-        // Analysis ran server-side in the same request (no payload round-trip)
-        dispatch({ type: "SET_ANALYSIS", analysis: data.analysis });
-        dispatch({ type: "SET_ANALYZING", v: false });
-      } else if (data.analysisError) {
-        // Frames extracted OK but Gemini analysis failed
-        dispatch({ type: "SET_ANALYZE_ERROR", error: data.analysisError });
-      } else {
-        // No analysis returned — shouldn't happen with analyze=true
-        dispatch({ type: "SET_ANALYZE_ERROR", error: "No analysis returned from server" });
       }
     } catch (err) {
       dispatch({
@@ -57,7 +164,53 @@ export function useAnalysis() {
         error: err instanceof Error ? err.message : "Failed",
       });
     }
-  }, [s.sourceType, s.selectedAdVideoUrl, s.uploadedVideoFile, dispatch]);
+  }, [s.sourceType, s.selectedAdVideoUrl, s.uploadedVideoUrl, s.uploadedVideoFile, dispatch]);
 
   return { extractFrames };
+}
+
+/**
+ * Extract higher-resolution frames client-side for direct Gemini analysis.
+ * Used as fallback when video is too large to upload through Vercel.
+ * Frames are 480px wide — good enough for Gemini, small enough for API payload.
+ */
+function extractFramesHiRes(
+  videoUrl: string,
+  maxFrames = 30
+): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.crossOrigin = "anonymous";
+    video.muted = true;
+    video.preload = "auto";
+
+    video.onloadedmetadata = () => {
+      const duration = video.duration;
+      const canvas = document.createElement("canvas");
+      canvas.width = 480;
+      canvas.height = Math.round(480 * (video.videoHeight / video.videoWidth));
+      const ctx = canvas.getContext("2d")!;
+
+      const interval = duration / maxFrames;
+      const frames: string[] = [];
+      let currentTime = 0;
+
+      video.onseeked = () => {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        frames.push(canvas.toDataURL("image/jpeg", 0.6));
+
+        currentTime += interval;
+        if (currentTime < duration && frames.length < maxFrames) {
+          video.currentTime = currentTime;
+        } else {
+          resolve(frames);
+        }
+      };
+
+      video.currentTime = 0;
+    };
+
+    video.onerror = () => reject(new Error("Failed to load video"));
+    video.src = videoUrl;
+  });
 }

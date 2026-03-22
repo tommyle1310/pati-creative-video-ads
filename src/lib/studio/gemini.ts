@@ -332,6 +332,67 @@ const ANALYSIS_SCHEMA = {
   required: ["musicAndPacing", "sceneBreakdown"] as const,
 };
 
+/**
+ * Analyze a video directly using Gemini File API — no frame extraction needed.
+ * Uploads the video bytes to Gemini, waits for processing, then analyzes.
+ * This avoids Vercel's 4.5MB payload limit entirely.
+ */
+export async function analyzeVideoFromBytes(
+  videoBuffer: Buffer,
+  mimeType: string = "video/mp4"
+): Promise<VideoAnalysis> {
+  const ai = getClient();
+
+  // Upload video to Gemini File API
+  const uploadedFile = await ai.files.upload({
+    file: new Blob([new Uint8Array(videoBuffer)], { type: mimeType }),
+    config: { mimeType },
+  });
+
+  if (!uploadedFile.name) throw new Error("File upload returned no name");
+
+  // Wait for file to be processed (ACTIVE state)
+  let file = await ai.files.get({ name: uploadedFile.name });
+  const maxWait = 120_000; // 2 minutes
+  const start = Date.now();
+  while (file.state === "PROCESSING" && Date.now() - start < maxWait) {
+    await new Promise((r) => setTimeout(r, 3000));
+    file = await ai.files.get({ name: uploadedFile.name });
+  }
+  if (file.state !== "ACTIVE") {
+    throw new Error(`Video processing failed: state=${file.state}`);
+  }
+
+  const parts: Part[] = [
+    {
+      text: `Analyze this video ad in full detail.
+
+IMPORTANT: This is a video AD — scenes change rapidly (every 1-4 seconds). Cut scenes at every visual change. Make sure you cover the ENTIRE video from start to finish. Extract the COMPLETE voiceover/text for each scene. Transcribe audio precisely.`,
+    },
+    {
+      fileData: { fileUri: file.uri!, mimeType: file.mimeType! },
+    },
+  ];
+
+  const result = await callWithRetry(async (model) => {
+    const response = await ai.models.generateContent({
+      model,
+      contents: { parts },
+      config: {
+        systemInstruction: VIDEO_ANALYSIS_INSTRUCTION,
+        responseMimeType: "application/json",
+        responseSchema: ANALYSIS_SCHEMA,
+      },
+    });
+    return JSON.parse(response.text!.trim()) as VideoAnalysis;
+  });
+
+  // Clean up uploaded file
+  try { await ai.files.delete({ name: uploadedFile.name }); } catch {}
+
+  return result;
+}
+
 export async function analyzeVideoFrames(
   frames: string[],
   fps: number,

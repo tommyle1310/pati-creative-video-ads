@@ -1,18 +1,21 @@
 /**
  * POST /api/studio/extract-frames
- * Downloads a video, extracts frames server-side using FFmpeg,
- * and optionally runs Gemini analysis in one pass (avoids payload round-trip).
+ * Downloads a video, generates thumbnails for client preview,
+ * and analyzes via Gemini File API (video uploaded directly to Gemini).
  *
- * Body: { videoUrl: string, analyze?: boolean } OR FormData with "video" file (+ "analyze" field)
- * Returns: { frames: string[], duration: number, format: string, fps: number, audio?: string, analysis?: VideoAnalysis }
+ * Body: { videoUrl: string, analyze?: boolean }
+ * Returns: { frames: string[], duration: number, format: string, fps: number, analysis?: VideoAnalysis }
+ *
+ * NOTE: No longer accepts FormData uploads. Client must provide a video URL.
+ * For user-uploaded videos, upload to Vidtory first to get a URL.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
-import { analyzeVideoFrames } from "@/lib/studio/gemini";
+import { analyzeVideoFromBytes } from "@/lib/studio/gemini";
 
-// Allow up to 5 minutes for extraction + Gemini analysis in one pass
+// Allow up to 5 minutes for download + Gemini analysis
 export const maxDuration = 300;
 
 const TMP_DIR = path.join(process.cwd(), ".tmp", "studio-frames");
@@ -61,80 +64,7 @@ async function getFormat(videoPath: string): Promise<string> {
   return "unknown";
 }
 
-function getTimestamps(duration: number): number[] {
-  if (duration <= 0) return [0];
-
-  // Extract ~1 frame/second — enough for scene detection without
-  // flooding the client/Gemini with redundant frames. Cap at 60.
-  const interval = 1.0; // every 1 second
-  const maxFrames = 60;
-  const timestamps: number[] = [];
-
-  for (let t = 0; t < duration; t += interval) {
-    timestamps.push(Math.round(t * 100) / 100); // avoid float drift
-  }
-  // Always include the last moment
-  if (timestamps.length === 0 || timestamps[timestamps.length - 1] < duration - 0.3) {
-    timestamps.push(Math.max(0, duration - 0.2));
-  }
-
-  return timestamps.slice(0, maxFrames);
-}
-
-async function extractFrames(
-  videoPath: string,
-  jobDir: string,
-  duration: number
-): Promise<string[]> {
-  const timestamps = getTimestamps(duration);
-
-  // Use a single FFmpeg pass with fps filter for efficiency (1 fps)
-  const outputPattern = path.join(jobDir, "frame_%04d.jpg");
-  try {
-    await run("ffmpeg", [
-      "-i", videoPath,
-      "-vf", "fps=1",
-      "-q:v", "4",
-      "-y", outputPattern,
-    ], 120000); // 2 min timeout for longer videos
-  } catch {
-    // Fallback: extract per-timestamp if fps filter fails
-    const framePaths: string[] = [];
-    for (const ts of timestamps.slice(0, 60)) {
-      const framePath = path.join(jobDir, `frame_${ts}s.jpg`);
-      try {
-        await run("ffmpeg", [
-          "-ss", String(ts), "-i", videoPath,
-          "-vframes", "1", "-q:v", "4", "-y", framePath,
-        ], 15000);
-        if (fs.existsSync(framePath) && fs.statSync(framePath).size > 500) {
-          framePaths.push(framePath);
-        }
-      } catch {
-        // skip this timestamp
-      }
-    }
-    return framePaths;
-  }
-
-  // Collect all extracted frames in order
-  const framePaths: string[] = [];
-  const files = fs.readdirSync(jobDir)
-    .filter((f) => f.startsWith("frame_") && f.endsWith(".jpg"))
-    .sort();
-  for (const file of files) {
-    const fp = path.join(jobDir, file);
-    if (fs.statSync(fp).size > 500) {
-      framePaths.push(fp);
-    }
-  }
-
-  // Cap at 60 frames
-  return framePaths.slice(0, 60);
-}
-
 async function downloadVideo(url: string, outputPath: string): Promise<void> {
-  // Use fetch with User-Agent to download
   const res = await fetch(url, {
     headers: {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -151,24 +81,13 @@ export async function POST(req: NextRequest) {
   const videoPath = path.join(jobDir, "video.mp4");
 
   try {
-    const contentType = req.headers.get("content-type") || "";
-    let shouldAnalyze = false;
-
-    if (contentType.includes("multipart/form-data")) {
-      // File upload
-      const formData = await req.formData();
-      const file = formData.get("video") as File | null;
-      if (!file) return NextResponse.json({ error: "No video file" }, { status: 400 });
-      const bytes = await file.arrayBuffer();
-      fs.writeFileSync(videoPath, Buffer.from(bytes));
-      shouldAnalyze = formData.get("analyze") === "true";
-    } else {
-      // JSON with videoUrl
-      const body = await req.json();
-      if (!body.videoUrl) return NextResponse.json({ error: "No videoUrl" }, { status: 400 });
-      await downloadVideo(body.videoUrl, videoPath);
-      shouldAnalyze = !!body.analyze;
+    const body = await req.json();
+    if (!body.videoUrl) {
+      return NextResponse.json({ error: "No videoUrl provided" }, { status: 400 });
     }
+    const shouldAnalyze = !!body.analyze;
+
+    await downloadVideo(body.videoUrl, videoPath);
 
     if (!fs.existsSync(videoPath) || fs.statSync(videoPath).size < 1000) {
       return NextResponse.json({ error: "Video download failed or file too small" }, { status: 400 });
@@ -176,20 +95,8 @@ export async function POST(req: NextRequest) {
 
     const duration = await getDuration(videoPath);
     const format = await getFormat(videoPath);
-    const framePaths = await extractFrames(videoPath, jobDir, duration);
 
-    if (framePaths.length === 0) {
-      return NextResponse.json({ error: "FFmpeg could not extract any frames" }, { status: 500 });
-    }
-
-    // Convert full frames to base64 (kept server-side for Gemini, NOT sent to client)
-    const fullFrames = framePaths.map((fp) => {
-      const buf = fs.readFileSync(fp);
-      return `data:image/jpeg;base64,${buf.toString("base64")}`;
-    });
-
-    // Generate tiny thumbnails (120px wide) for the client preview strip
-    // This keeps the response payload under Vercel's 4.5MB limit
+    // Generate tiny thumbnails (120px wide, low quality) for client preview strip
     const thumbDir = path.join(jobDir, "thumbs");
     fs.mkdirSync(thumbDir, { recursive: true });
     let thumbnails: string[] = [];
@@ -209,40 +116,19 @@ export async function POST(req: NextRequest) {
         return `data:image/jpeg;base64,${buf.toString("base64")}`;
       });
     } catch {
-      // Fallback: send a small subset of full frames (every 4th, max 15)
-      thumbnails = fullFrames.filter((_, i) => i % 4 === 0).slice(0, 15);
+      // If thumbnail generation fails, return empty array — not critical
+      console.warn("[studio/extract-frames] Thumbnail generation failed");
     }
 
-    // Extract audio track as MP3 for speech transcription
-    let audioBase64: string | null = null;
-    const audioPath = path.join(jobDir, "audio.mp3");
-    try {
-      await run("ffmpeg", [
-        "-i", videoPath,
-        "-vn",             // no video
-        "-acodec", "libmp3lame",
-        "-ar", "16000",    // 16kHz mono — sufficient for speech, small file
-        "-ac", "1",
-        "-b:a", "64k",
-        "-y", audioPath,
-      ], 60000);
-      if (fs.existsSync(audioPath) && fs.statSync(audioPath).size > 500) {
-        const audioBuf = fs.readFileSync(audioPath);
-        audioBase64 = audioBuf.toString("base64");
-      }
-    } catch {
-      // Video may have no audio track — continue without it
-      console.warn("[studio/extract-frames] No audio track or extraction failed");
-    }
+    const fps = Math.max(thumbnails.length, 1) / Math.max(duration, 1);
 
-    const fps = fullFrames.length / Math.max(duration, 1);
-
-    // Run Gemini analysis server-side with full frames (never sent to client)
+    // Analyze video using Gemini File API (upload video directly to Gemini)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let analysis: any = undefined;
     if (shouldAnalyze) {
       try {
-        analysis = await analyzeVideoFrames(fullFrames, fps, duration, audioBase64 || undefined);
+        const videoBuffer = fs.readFileSync(videoPath);
+        analysis = await analyzeVideoFromBytes(videoBuffer, "video/mp4");
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Analysis failed";
         console.error("[studio/extract-frames] analysis error:", msg);
@@ -257,7 +143,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      frames: thumbnails,  // tiny thumbnails only
+      frames: thumbnails,
       duration,
       format,
       fps,
@@ -268,7 +154,6 @@ export async function POST(req: NextRequest) {
     console.error("[studio/extract-frames]", msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   } finally {
-    // Clean up
     try { fs.rmSync(jobDir, { recursive: true, force: true }); } catch {}
   }
 }
