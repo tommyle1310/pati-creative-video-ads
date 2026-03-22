@@ -60,39 +60,49 @@ export function StepGenerate() {
       {/* Header + controls */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-lg font-semibold">Generate Assets</h2>
-        <div className="flex gap-2 flex-wrap items-center">
-          <select
-            value={s.aspectRatio}
-            onChange={(e) =>
-              dispatch({
-                type: "SET_FIELD",
-                field: "aspectRatio",
-                value: e.target.value,
-              })
-            }
-            className="bg-background border border-border rounded px-2 py-1 text-sm"
-          >
-            <option value="9:16">9:16 (Portrait)</option>
-            <option value="16:9">16:9 (Landscape)</option>
-            <option value="1:1">1:1 (Square)</option>
-          </select>
-          <select
-            value={s.voice}
-            onChange={(e) =>
-              dispatch({
-                type: "SET_FIELD",
-                field: "voice",
-                value: e.target.value,
-              })
-            }
-            className="bg-background border border-border rounded px-2 py-1 text-sm"
-          >
-            {VOICES.map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </select>
+        <div className="flex gap-3 flex-wrap items-end">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+              Aspect Ratio
+            </label>
+            <select
+              value={s.aspectRatio}
+              onChange={(e) =>
+                dispatch({
+                  type: "SET_FIELD",
+                  field: "aspectRatio",
+                  value: e.target.value,
+                })
+              }
+              className="bg-background border border-border rounded px-2 py-1.5 text-sm"
+            >
+              <option value="9:16">9:16 (Portrait)</option>
+              <option value="16:9">16:9 (Landscape)</option>
+              <option value="1:1">1:1 (Square)</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+              Voiceover Voice
+            </label>
+            <select
+              value={s.voice}
+              onChange={(e) =>
+                dispatch({
+                  type: "SET_FIELD",
+                  field: "voice",
+                  value: e.target.value,
+                })
+              }
+              className="bg-background border border-border rounded px-2 py-1.5 text-sm"
+            >
+              {VOICES.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </div>
           <button
             onClick={handleGenerateAllImages}
             disabled={s.scenes.every((sc) => sc.isGeneratingImage)}
@@ -103,7 +113,7 @@ export function StepGenerate() {
             ) : (
               <ImageIcon size={14} />
             )}
-            All Images
+            Generate All Images
           </button>
           <button
             onClick={handleGenerateAllAudio}
@@ -115,7 +125,7 @@ export function StepGenerate() {
             ) : (
               <Volume2 size={14} />
             )}
-            All Audio
+            Generate All Audio
           </button>
         </div>
       </div>
@@ -346,7 +356,7 @@ export function StepGenerate() {
                             )}
                             {scene.isGeneratingImage
                               ? "Generating..."
-                              : "Generate"}
+                              : "New Image"}
                           </button>
                         </div>
                       </div>
@@ -462,7 +472,7 @@ export function StepGenerate() {
                             )}
                             {scene.isGeneratingVideo
                               ? "Generating..."
-                              : "Generate"}
+                              : "New Video"}
                           </button>
                         </div>
                       </div>
@@ -554,7 +564,7 @@ export function StepGenerate() {
                           )}
                           {scene.isGeneratingAudio
                             ? "Generating..."
-                            : "Generate"}
+                            : "New Audio"}
                         </button>
                       </div>
                       {scene.audioGenerationError && (
