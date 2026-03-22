@@ -3,7 +3,7 @@ import "./globals.css";
 import Sidebar from "./components/Sidebar";
 
 export const metadata: Metadata = {
-  title: "Project Antigravity — Ad Intelligence Dashboard",
+  title: "Enhanced AI Factory",
   description:
     "Competitive ad intelligence platform. Discover winning ads, save and compare them, generate actionable creative briefs.",
 };
