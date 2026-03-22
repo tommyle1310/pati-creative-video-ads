@@ -36,37 +36,20 @@ export function useAnalysis() {
       }
 
       const data = await extractRes.json();
+
+      // Server returns tiny thumbnails for the preview strip
       dispatch({ type: "SET_FRAMES", frames: data.frames });
 
-      // Analysis ran server-side in the same request
       if (data.analysis) {
+        // Analysis ran server-side in the same request (no payload round-trip)
         dispatch({ type: "SET_ANALYSIS", analysis: data.analysis });
         dispatch({ type: "SET_ANALYZING", v: false });
       } else if (data.analysisError) {
-        // Frames extracted OK but analysis failed — let user retry
+        // Frames extracted OK but Gemini analysis failed
         dispatch({ type: "SET_ANALYZE_ERROR", error: data.analysisError });
       } else {
-        // Fallback: if server didn't analyze, send frames to /analyze
-        // (shouldn't happen with analyze=true, but just in case)
-        const analyzeRes = await fetch("/api/studio/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            frames: data.frames,
-            fps: data.fps,
-            duration: data.duration,
-            audio: data.audio,
-          }),
-        });
-
-        if (!analyzeRes.ok) {
-          const err = await analyzeRes.json();
-          throw new Error(err.error || "Analysis failed");
-        }
-
-        const analysis = await analyzeRes.json();
-        dispatch({ type: "SET_ANALYSIS", analysis });
-        dispatch({ type: "SET_ANALYZING", v: false });
+        // No analysis returned — shouldn't happen with analyze=true
+        dispatch({ type: "SET_ANALYZE_ERROR", error: "No analysis returned from server" });
       }
     } catch (err) {
       dispatch({

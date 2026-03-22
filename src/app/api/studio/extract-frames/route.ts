@@ -182,11 +182,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "FFmpeg could not extract any frames" }, { status: 500 });
     }
 
-    // Convert frames to base64
-    const frames = framePaths.map((fp) => {
+    // Convert full frames to base64 (kept server-side for Gemini, NOT sent to client)
+    const fullFrames = framePaths.map((fp) => {
       const buf = fs.readFileSync(fp);
       return `data:image/jpeg;base64,${buf.toString("base64")}`;
     });
+
+    // Generate tiny thumbnails (120px wide) for the client preview strip
+    // This keeps the response payload under Vercel's 4.5MB limit
+    const thumbDir = path.join(jobDir, "thumbs");
+    fs.mkdirSync(thumbDir, { recursive: true });
+    let thumbnails: string[] = [];
+    try {
+      const thumbPattern = path.join(thumbDir, "thumb_%04d.jpg");
+      await run("ffmpeg", [
+        "-i", videoPath,
+        "-vf", "fps=1,scale=120:-1",
+        "-q:v", "8",
+        "-y", thumbPattern,
+      ], 120000);
+      const thumbFiles = fs.readdirSync(thumbDir)
+        .filter((f) => f.startsWith("thumb_") && f.endsWith(".jpg"))
+        .sort();
+      thumbnails = thumbFiles.slice(0, 60).map((f) => {
+        const buf = fs.readFileSync(path.join(thumbDir, f));
+        return `data:image/jpeg;base64,${buf.toString("base64")}`;
+      });
+    } catch {
+      // Fallback: send a small subset of full frames (every 4th, max 15)
+      thumbnails = fullFrames.filter((_, i) => i % 4 === 0).slice(0, 15);
+    }
 
     // Extract audio track as MP3 for speech transcription
     let audioBase64: string | null = null;
@@ -210,42 +235,32 @@ export async function POST(req: NextRequest) {
       console.warn("[studio/extract-frames] No audio track or extraction failed");
     }
 
-    const fps = frames.length / Math.max(duration, 1);
+    const fps = fullFrames.length / Math.max(duration, 1);
 
-    // Send only lightweight frame thumbnails to client (for preview strip),
-    // but run Gemini analysis server-side to avoid payload round-trip.
-    // Client frames are downsized to save bandwidth.
-    const clientFrames = framePaths.map((fp) => {
-      const buf = fs.readFileSync(fp);
-      return `data:image/jpeg;base64,${buf.toString("base64")}`;
-    });
-
+    // Run Gemini analysis server-side with full frames (never sent to client)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let analysis: any = undefined;
     if (shouldAnalyze) {
       try {
-        analysis = await analyzeVideoFrames(frames, fps, duration, audioBase64 || undefined);
+        analysis = await analyzeVideoFrames(fullFrames, fps, duration, audioBase64 || undefined);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Analysis failed";
         console.error("[studio/extract-frames] analysis error:", msg);
-        // Return frames even if analysis fails — client can retry via /analyze
         return NextResponse.json({
-          frames: clientFrames,
+          frames: thumbnails,
           duration,
           format,
           fps,
-          audio: audioBase64,
           analysisError: msg,
         });
       }
     }
 
     return NextResponse.json({
-      frames: clientFrames,
+      frames: thumbnails,  // tiny thumbnails only
       duration,
       format,
       fps,
-      audio: shouldAnalyze ? undefined : audioBase64, // Don't send audio to client if already analyzed
       analysis,
     });
   } catch (e: unknown) {
