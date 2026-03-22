@@ -1,14 +1,19 @@
 /**
  * POST /api/studio/extract-frames
- * Downloads a video and extracts frames server-side using FFmpeg.
+ * Downloads a video, extracts frames server-side using FFmpeg,
+ * and optionally runs Gemini analysis in one pass (avoids payload round-trip).
  *
- * Body: { videoUrl: string } OR FormData with "video" file
- * Returns: { frames: string[], duration: number, format: string }
+ * Body: { videoUrl: string, analyze?: boolean } OR FormData with "video" file (+ "analyze" field)
+ * Returns: { frames: string[], duration: number, format: string, fps: number, audio?: string, analysis?: VideoAnalysis }
  */
 import { NextRequest, NextResponse } from "next/server";
 import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
+import { analyzeVideoFrames } from "@/lib/studio/gemini";
+
+// Allow up to 5 minutes for extraction + Gemini analysis in one pass
+export const maxDuration = 300;
 
 const TMP_DIR = path.join(process.cwd(), ".tmp", "studio-frames");
 
@@ -147,6 +152,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const contentType = req.headers.get("content-type") || "";
+    let shouldAnalyze = false;
 
     if (contentType.includes("multipart/form-data")) {
       // File upload
@@ -155,11 +161,13 @@ export async function POST(req: NextRequest) {
       if (!file) return NextResponse.json({ error: "No video file" }, { status: 400 });
       const bytes = await file.arrayBuffer();
       fs.writeFileSync(videoPath, Buffer.from(bytes));
+      shouldAnalyze = formData.get("analyze") === "true";
     } else {
       // JSON with videoUrl
-      const { videoUrl } = await req.json();
-      if (!videoUrl) return NextResponse.json({ error: "No videoUrl" }, { status: 400 });
-      await downloadVideo(videoUrl, videoPath);
+      const body = await req.json();
+      if (!body.videoUrl) return NextResponse.json({ error: "No videoUrl" }, { status: 400 });
+      await downloadVideo(body.videoUrl, videoPath);
+      shouldAnalyze = !!body.analyze;
     }
 
     if (!fs.existsSync(videoPath) || fs.statSync(videoPath).size < 1000) {
@@ -202,12 +210,43 @@ export async function POST(req: NextRequest) {
       console.warn("[studio/extract-frames] No audio track or extraction failed");
     }
 
+    const fps = frames.length / Math.max(duration, 1);
+
+    // Send only lightweight frame thumbnails to client (for preview strip),
+    // but run Gemini analysis server-side to avoid payload round-trip.
+    // Client frames are downsized to save bandwidth.
+    const clientFrames = framePaths.map((fp) => {
+      const buf = fs.readFileSync(fp);
+      return `data:image/jpeg;base64,${buf.toString("base64")}`;
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let analysis: any = undefined;
+    if (shouldAnalyze) {
+      try {
+        analysis = await analyzeVideoFrames(frames, fps, duration, audioBase64 || undefined);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Analysis failed";
+        console.error("[studio/extract-frames] analysis error:", msg);
+        // Return frames even if analysis fails — client can retry via /analyze
+        return NextResponse.json({
+          frames: clientFrames,
+          duration,
+          format,
+          fps,
+          audio: audioBase64,
+          analysisError: msg,
+        });
+      }
+    }
+
     return NextResponse.json({
-      frames,
+      frames: clientFrames,
       duration,
       format,
-      fps: frames.length / Math.max(duration, 1),
-      audio: audioBase64,
+      fps,
+      audio: shouldAnalyze ? undefined : audioBase64, // Don't send audio to client if already analyzed
+      analysis,
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Frame extraction failed";
