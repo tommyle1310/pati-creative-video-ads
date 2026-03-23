@@ -224,19 +224,36 @@ export function useAssetGeneration() {
       });
 
       try {
-        const res = await fetch("/api/studio/tts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: scene.voiceoverScript,
-            guide: scene.voiceoverGuide,
-            voice: s.voice,
-          }),
-        });
-        if (!res.ok) throw new Error((await res.json()).error);
-        const { audioBase64 } = await res.json();
+        let audioUrl: string;
 
-        const audioUrl = pcmToWav(audioBase64);
+        if (s.voiceSource === "elevenlabs") {
+          // ElevenLabs TTS — returns MP3
+          const res = await fetch("/api/studio/elevenlabs-tts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: scene.voiceoverScript,
+              voice_id: s.voice,
+            }),
+          });
+          if (!res.ok) throw new Error((await res.json()).error);
+          const { audioBase64 } = await res.json();
+          audioUrl = `data:audio/mpeg;base64,${audioBase64}`;
+        } else {
+          // Gemini TTS — returns PCM, needs WAV conversion
+          const res = await fetch("/api/studio/tts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: scene.voiceoverScript,
+              guide: scene.voiceoverGuide,
+              voice: s.voice,
+            }),
+          });
+          if (!res.ok) throw new Error((await res.json()).error);
+          const { audioBase64 } = await res.json();
+          audioUrl = pcmToWav(audioBase64);
+        }
 
         dispatch({
           type: "UPDATE_SCENE",
@@ -255,7 +272,7 @@ export function useAssetGeneration() {
         });
       }
     },
-    [s.scenes, s.voice, dispatch]
+    [s.scenes, s.voice, s.voiceSource, dispatch]
   );
 
   const handleGenerateAllImages = useCallback(async () => {

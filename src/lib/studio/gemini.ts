@@ -63,7 +63,22 @@ Label each scene with its marketing purpose AND its visual roll type:
 - For product scenes: exact product appearance, how it's held, branding visible
 - For talking head: expression, gesture, eye direction, setting
 
-Output: JSON object with sceneBreakdown[] and musicAndPacing (include BPM estimate, energy level, genre).`;
+## AD ANALYSIS (adAnalysis object)
+In addition to the scene breakdown, produce a high-level strategic analysis of the ad:
+- hook: Named hook TYPE + "Why it stops the scroll" paragraph. Identify the psychological trigger (curiosity gap, pattern interrupt, shock, empathy, etc.)
+- concept: The big idea / angle of the ad. What core message or positioning does it communicate?
+- scriptBreakdown: Named framework (Problem-Solution, Before-After-Bridge, AIDA, PAS, etc.) + numbered beats with timecodes
+- visual: Overall visual strategy — shooting style, color grading, pacing rhythm, transition patterns, use of text overlays
+- psychology: Consumer psychology mechanisms at play — pain points exploited, desire triggers, cognitive biases leveraged (social proof, authority, scarcity, loss aversion, etc.)
+- cta: CTA analysis — what is the call to action, how is it delivered, urgency/scarcity elements
+- keyTakeaways: At least 2 STEAL (elements to copy directly), 2 KAIZEN (elements to improve), and 1 UPGRADE idea
+- productionFormula: FORMAT line + phases with screen direction + voiceover + TEXT SUPER for each phase
+- hookType: Short classification string (e.g. "Curiosity Gap", "Pattern Interrupt", "Social Proof Lead", "Problem Agitation")
+- primaryAngle: Short string for the primary messaging angle (e.g. "Health Transformation", "Scientific Authority", "Social Validation")
+- frameworkName: Short string for the script framework used (e.g. "Problem-Solution", "Before-After-Bridge", "AIDA")
+- creativePattern: EXACTLY one of: "Problem-First UGC" | "Result-First Scroll Stop" | "Curiosity Gap" | "Social Proof Cascade" | "Comparison/Versus" | "Authority Demo" | "Unclassifiable"
+
+Output: JSON object with sceneBreakdown[], musicAndPacing (include BPM estimate, energy level, genre), and adAnalysis object.`;
 
 const CLONED_SCRIPT_INSTRUCTION = `You are an expert scriptwriter for high-converting short-form video ads.
 Create a NEW multi-scene script for a NEW product that CLONES the structure and pacing of the original ad.
@@ -333,8 +348,26 @@ const ANALYSIS_SCHEMA = {
         required: ["scene_id", "type", "time", "visual", "speech"] as const,
       },
     },
+    adAnalysis: {
+      type: "OBJECT" as const,
+      properties: {
+        hook: { type: "STRING" as const, description: "Named hook type + why it stops the scroll" },
+        concept: { type: "STRING" as const, description: "The big idea / angle of the ad" },
+        scriptBreakdown: { type: "STRING" as const, description: "Named framework + numbered beats with timecodes" },
+        visual: { type: "STRING" as const, description: "Overall visual strategy analysis" },
+        psychology: { type: "STRING" as const, description: "Consumer psychology mechanisms at play" },
+        cta: { type: "STRING" as const, description: "CTA analysis — delivery, urgency, scarcity" },
+        keyTakeaways: { type: "STRING" as const, description: "STEAL / KAIZEN / UPGRADE items" },
+        productionFormula: { type: "STRING" as const, description: "FORMAT + phases with screen direction, voiceover, text supers" },
+        hookType: { type: "STRING" as const, description: "Short classification e.g. 'Curiosity Gap', 'Pattern Interrupt'" },
+        primaryAngle: { type: "STRING" as const, description: "Short primary messaging angle" },
+        frameworkName: { type: "STRING" as const, description: "Short script framework name e.g. 'Problem-Solution', 'AIDA'" },
+        creativePattern: { type: "STRING" as const, description: "One of: Problem-First UGC | Result-First Scroll Stop | Curiosity Gap | Social Proof Cascade | Comparison/Versus | Authority Demo | Unclassifiable" },
+      },
+      required: ["hook", "concept", "scriptBreakdown", "visual", "psychology", "cta", "keyTakeaways", "productionFormula", "hookType", "primaryAngle", "frameworkName", "creativePattern"] as const,
+    },
   },
-  required: ["musicAndPacing", "sceneBreakdown"] as const,
+  required: ["musicAndPacing", "sceneBreakdown", "adAnalysis"] as const,
 };
 
 /**

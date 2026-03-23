@@ -104,28 +104,7 @@ export function StepGenerate() {
               <option value="kling-3.0">Kling 3.0 (KIE)</option>
             </select>
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-              Voiceover Voice
-            </label>
-            <select
-              value={s.voice}
-              onChange={(e) =>
-                dispatch({
-                  type: "SET_FIELD",
-                  field: "voice",
-                  value: e.target.value,
-                })
-              }
-              className="bg-background border border-border rounded px-2 py-1.5 text-sm"
-            >
-              {VOICES.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </div>
+          <VoicePicker />
           <button
             onClick={handleGenerateAllImages}
             disabled={s.scenes.every((sc) => sc.isGeneratingImage)}

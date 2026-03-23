@@ -50,9 +50,25 @@ export interface SceneBreakdown {
   speech: string;
 }
 
+export interface AdAnalysis {
+  hook: string;
+  concept: string;
+  scriptBreakdown: string;
+  visual: string;
+  psychology: string;
+  cta: string;
+  keyTakeaways: string;
+  productionFormula: string;
+  hookType: string;
+  primaryAngle: string;
+  frameworkName: string;
+  creativePattern: string;
+}
+
 export interface VideoAnalysis {
   musicAndPacing: string;
   sceneBreakdown: SceneBreakdown[];
+  adAnalysis?: AdAnalysis;
 }
 
 // ── API Request/Response types ──

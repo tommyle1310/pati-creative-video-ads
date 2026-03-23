@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Loader2, Sparkles, RotateCcw, FileText } from "lucide-react";
+import { Loader2, Sparkles, RotateCcw, FileText, ChevronDown, ChevronRight } from "lucide-react";
 import { useStudio } from "../_state/context";
 import { useAnalysis } from "../_hooks/useAnalysis";
 import { AnalysisSkeleton } from "./SkeletonPanels";
@@ -59,6 +59,28 @@ function parseProvidedScript(raw: string): VideoAnalysis {
   };
 }
 
+function AnalysisFieldBlock({ label, content, defaultOpen = true }: { label: string; content: string; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  if (!content) return null;
+
+  return (
+    <div className="border border-border rounded-md overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between px-4 py-2.5 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
+        onClick={() => setOpen(!open)}
+      >
+        <span className="text-sm font-medium text-foreground">{label}</span>
+        {open ? <ChevronDown size={14} className="text-muted-foreground" /> : <ChevronRight size={14} className="text-muted-foreground" />}
+      </button>
+      {open && (
+        <div className="px-4 py-3 text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+          {content}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StepAnalyze() {
   const { s, dispatch } = useStudio();
   const { extractFrames } = useAnalysis();
@@ -84,6 +106,8 @@ export function StepAnalyze() {
   }, [waitingForAnalysis, s.analyzeError]);
 
   // Button is disabled during extraction, analysis, OR while waiting for analysis result
+  const [showAdAnalysis, setShowAdAnalysis] = useState(true);
+
   const isBusy = s.isAnalyzing || (waitingForAnalysis && !analysisTimedOut && !s.analyzeError);
 
   const buttonLabel = s.isAnalyzing
@@ -199,6 +223,59 @@ export function StepAnalyze() {
       {/* Analysis result */}
       {analysisExists && (
         <div className="space-y-4">
+          {/* Ad Analysis Panel */}
+          {s.analysis!.adAnalysis && (
+            <div className="space-y-3">
+              <button
+                className="flex items-center gap-2 text-sm font-semibold text-foreground hover:text-foreground/80 transition-colors"
+                onClick={() => setShowAdAnalysis(!showAdAnalysis)}
+              >
+                {showAdAnalysis ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                Ad Analysis
+                {s.analysis!.adAnalysis.hookType && (
+                  <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">
+                    {s.analysis!.adAnalysis.hookType}
+                  </span>
+                )}
+                {s.analysis!.adAnalysis.creativePattern && (
+                  <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-400">
+                    {s.analysis!.adAnalysis.creativePattern}
+                  </span>
+                )}
+                {s.analysis!.adAnalysis.frameworkName && (
+                  <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">
+                    {s.analysis!.adAnalysis.frameworkName}
+                  </span>
+                )}
+              </button>
+
+              {showAdAnalysis && (
+                <>
+                  {/* Classification badges */}
+                  <div className="flex flex-wrap gap-2">
+                    {s.analysis!.adAnalysis.primaryAngle && (
+                      <span className="text-xs px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                        Angle: {s.analysis!.adAnalysis.primaryAngle}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Analysis fields */}
+                  <div className="space-y-2">
+                    <AnalysisFieldBlock label="Hook Analysis" content={s.analysis!.adAnalysis.hook} />
+                    <AnalysisFieldBlock label="Concept / Big Idea" content={s.analysis!.adAnalysis.concept} />
+                    <AnalysisFieldBlock label="Script Breakdown" content={s.analysis!.adAnalysis.scriptBreakdown} />
+                    <AnalysisFieldBlock label="Visual Strategy" content={s.analysis!.adAnalysis.visual} />
+                    <AnalysisFieldBlock label="Consumer Psychology" content={s.analysis!.adAnalysis.psychology} />
+                    <AnalysisFieldBlock label="CTA Analysis" content={s.analysis!.adAnalysis.cta} />
+                    <AnalysisFieldBlock label="Key Takeaways (STEAL / KAIZEN / UPGRADE)" content={s.analysis!.adAnalysis.keyTakeaways} />
+                    <AnalysisFieldBlock label="Production Formula" content={s.analysis!.adAnalysis.productionFormula} />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="bg-muted/50 rounded-md p-4">
             <h3 className="text-sm font-medium mb-1">Music & Pacing</h3>
             <p className="text-sm text-muted-foreground">

@@ -17,6 +17,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "text and voice_id are required" }, { status: 400 });
     }
 
+    // ElevenLabs requires at least 100 characters — pad short scripts with
+    // trailing SSML-style pauses that produce silence, preserving the original speech.
+    let paddedText = text;
+    if (paddedText.length < 100) {
+      paddedText = paddedText + " ...".repeat(Math.ceil((100 - paddedText.length) / 4));
+    }
+
     const res = await fetch(`${BASE}/text-to-speech/${voice_id}`, {
       method: "POST",
       headers: {
@@ -25,7 +32,7 @@ export async function POST(req: NextRequest) {
         Accept: "audio/mpeg",
       },
       body: JSON.stringify({
-        text,
+        text: paddedText,
         model_id: "eleven_v3",
         output_format: "mp3_44100_128",
       }),

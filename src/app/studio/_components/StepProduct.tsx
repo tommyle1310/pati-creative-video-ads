@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Image as ImageIcon,
   Globe,
@@ -9,11 +9,89 @@ import {
   Plus,
   Loader2,
   Sparkles,
+  ChevronDown,
+  ChevronRight,
+  Eye,
 } from "lucide-react";
 import { useStudio } from "../_state/context";
 import { useLandingPageScrape } from "../_hooks/useLandingPageScrape";
 import { MOTIVATORS, EMOTIONAL_TONES, STORYLINE_TYPES } from "../_constants";
 import { fileToBase64 } from "../_utils/helpers";
+import type { AdAnalysis } from "@/lib/studio/types";
+
+// ── Fuzzy detection: map ad analysis → our constant values ──
+
+const MOTIVATOR_KEYWORDS: Record<string, string[]> = {
+  "pain-point": ["pain", "frustrat", "struggle", "problem", "agitat", "tired of"],
+  "aspiration": ["aspir", "transform", "dream", "desire", "pleasure", "imagin", "result"],
+  "social-proof": ["social proof", "everyone", "people", "reviews", "testimonial", "million"],
+  "curiosity": ["curiosity", "curiosity gap", "secret", "didn't know", "information gap"],
+  "urgency": ["urgen", "scarci", "fear", "fomo", "limited", "last chance", "running out"],
+  "identity": ["identity", "persona", "who you are", "tribe", "community"],
+  "feature-led": ["feature", "attribute", "specification", "ingredient", "formula"],
+  "problem-solution": ["problem.?solution", "before.?after", "PAS", "bridge"],
+  "authority": ["authority", "expert", "doctor", "scientist", "credib", "research"],
+  "comparison": ["comparison", "versus", "vs\\.?", "competitor", "alternative", "better than"],
+};
+
+const TONE_KEYWORDS: Record<string, string[]> = {
+  "inspirational": ["inspir", "transform", "aspir", "motivat", "empower"],
+  "relatable": ["relat", "pain", "problem", "frustrat", "struggle", "empathy"],
+  "urgent": ["urgen", "scarci", "limited", "countdown", "fomo"],
+  "calm": ["calm", "reassur", "trust", "premium", "serene", "gentle"],
+  "humorous": ["humor", "funny", "satir", "comedy", "laugh", "pattern interrupt"],
+  "educational": ["educat", "inform", "learn", "explain", "science", "mechanism"],
+  "emotional": ["emotion", "heartfelt", "sentimental", "touching", "feel"],
+};
+
+const STORYLINE_KEYWORDS: Record<string, string[]> = {
+  "founder-story": ["founder", "origin", "why.?creat", "started"],
+  "day-in-the-life": ["day.?in", "routine", "lifestyle", "daily"],
+  "problem-solution": ["problem.?solution", "before.?after", "PAS", "bridge", "AIDA"],
+  "things-you-didnt-know": ["didn't know", "surprising", "fact", "myth", "educati"],
+  "behind-the-scenes": ["behind.?the", "how it's made", "BTS", "making of"],
+  "testimonial": ["testimonial", "review", "UGC", "customer.?story", "experience"],
+  "unboxing": ["unboxing", "first impression", "discovery", "reveal"],
+};
+
+function detectMatch(text: string, keywords: Record<string, string[]>): string | null {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  let bestMatch: string | null = null;
+  let bestScore = 0;
+  for (const [value, patterns] of Object.entries(keywords)) {
+    let score = 0;
+    for (const pattern of patterns) {
+      if (new RegExp(pattern, "i").test(lower)) score++;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = value;
+    }
+  }
+  return bestScore > 0 ? bestMatch : null;
+}
+
+function useDetectedStrategy(adAnalysis: AdAnalysis | undefined) {
+  return useMemo(() => {
+    if (!adAnalysis) return { motivator: null, tone: null, storyline: null };
+    const combined = [
+      adAnalysis.hookType,
+      adAnalysis.primaryAngle,
+      adAnalysis.psychology,
+      adAnalysis.hook,
+      adAnalysis.concept,
+    ].join(" ");
+    return {
+      motivator: detectMatch(combined, MOTIVATOR_KEYWORDS),
+      tone: detectMatch(combined, TONE_KEYWORDS),
+      storyline: detectMatch(
+        [adAnalysis.frameworkName, adAnalysis.creativePattern, adAnalysis.scriptBreakdown].join(" "),
+        STORYLINE_KEYWORDS
+      ),
+    };
+  }, [adAnalysis]);
+}
 
 export function StepProduct() {
   const { s, dispatch } = useStudio();
@@ -24,6 +102,10 @@ export function StepProduct() {
     handleScrapeLandingPages,
     loadSavedProfileUrls,
   } = useLandingPageScrape();
+
+  const adAnalysis = s.analysis?.adAnalysis;
+  const detected = useDetectedStrategy(adAnalysis);
+  const [showAnalysisRef, setShowAnalysisRef] = useState(true);
 
   // Auto-populate URLs from saved product profiles on mount
   useEffect(() => { loadSavedProfileUrls(); }, []);
@@ -44,6 +126,76 @@ export function StepProduct() {
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold">Product & Creator Setup</h2>
+
+      {/* Original Ad Analysis Reference */}
+      {adAnalysis && (
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-amber-500/10 transition-colors"
+            onClick={() => setShowAnalysisRef(!showAnalysisRef)}
+          >
+            <span className="flex items-center gap-2 text-sm font-medium text-amber-400">
+              <Eye size={14} />
+              Original Ad Analysis
+              {adAnalysis.hookType && (
+                <span className="text-[11px] font-normal px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300">
+                  {adAnalysis.hookType}
+                </span>
+              )}
+              {adAnalysis.creativePattern && (
+                <span className="text-[11px] font-normal px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-300">
+                  {adAnalysis.creativePattern}
+                </span>
+              )}
+            </span>
+            {showAnalysisRef ? <ChevronDown size={14} className="text-amber-400" /> : <ChevronRight size={14} className="text-amber-400" />}
+          </button>
+          {showAnalysisRef && (
+            <div className="px-4 pb-4 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {adAnalysis.concept && (
+                  <div className="rounded-md border border-border/50 bg-background/50 p-3">
+                    <h4 className="text-[11px] font-semibold uppercase text-muted-foreground mb-1">Concept / Big Idea</h4>
+                    <p className="text-xs text-foreground/80 leading-relaxed">{adAnalysis.concept}</p>
+                  </div>
+                )}
+                {adAnalysis.hook && (
+                  <div className="rounded-md border border-border/50 bg-background/50 p-3">
+                    <h4 className="text-[11px] font-semibold uppercase text-muted-foreground mb-1">Hook</h4>
+                    <p className="text-xs text-foreground/80 leading-relaxed">{adAnalysis.hook}</p>
+                  </div>
+                )}
+                {adAnalysis.psychology && (
+                  <div className="rounded-md border border-border/50 bg-background/50 p-3">
+                    <h4 className="text-[11px] font-semibold uppercase text-muted-foreground mb-1">Psychology</h4>
+                    <p className="text-xs text-foreground/80 leading-relaxed">{adAnalysis.psychology}</p>
+                  </div>
+                )}
+                {adAnalysis.cta && (
+                  <div className="rounded-md border border-border/50 bg-background/50 p-3">
+                    <h4 className="text-[11px] font-semibold uppercase text-muted-foreground mb-1">CTA</h4>
+                    <p className="text-xs text-foreground/80 leading-relaxed">{adAnalysis.cta}</p>
+                  </div>
+                )}
+              </div>
+              {/* Classification badges */}
+              <div className="flex flex-wrap gap-2">
+                {adAnalysis.primaryAngle && (
+                  <span className="text-[11px] px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                    Angle: {adAnalysis.primaryAngle}
+                  </span>
+                )}
+                {adAnalysis.frameworkName && (
+                  <span className="text-[11px] px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                    Framework: {adAnalysis.frameworkName}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Product image */}
         <div className="space-y-2">
@@ -244,28 +396,47 @@ export function StepProduct() {
             The psychological driver that makes someone take action
           </p>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-            {MOTIVATORS.map((m) => (
-              <button
-                key={m.value}
-                onClick={() =>
-                  dispatch({
-                    type: "SET_FIELD",
-                    field: "motivator",
-                    value: s.motivator === m.value ? "" : m.value,
-                  })
-                }
-                className={`text-left px-3 py-2 rounded-md border text-xs transition-colors ${
-                  s.motivator === m.value
-                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
-                    : "border-border hover:border-muted-foreground"
-                }`}
-              >
-                <span className="font-medium block">{m.label}</span>
-                <span className="text-muted-foreground block mt-0.5 leading-tight">
-                  {m.desc}
-                </span>
-              </button>
-            ))}
+            {MOTIVATORS.map((m) => {
+              const isDetected = detected.motivator === m.value;
+              const isSelected = s.motivator === m.value;
+              const isMatch = isSelected && isDetected;
+              return (
+                <button
+                  key={m.value}
+                  onClick={() =>
+                    dispatch({
+                      type: "SET_FIELD",
+                      field: "motivator",
+                      value: s.motivator === m.value ? "" : m.value,
+                    })
+                  }
+                  className={`text-left px-3 py-2 rounded-md border text-xs transition-colors relative ${
+                    isMatch
+                      ? "border-green-500 bg-green-500/15 text-green-300 ring-1 ring-green-500/30"
+                      : isSelected
+                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
+                      : isDetected
+                      ? "border-amber-500/40 bg-amber-500/5 text-foreground"
+                      : "border-border hover:border-muted-foreground"
+                  }`}
+                >
+                  {isDetected && !isSelected && (
+                    <span className="absolute -top-1.5 -right-1.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 leading-none">
+                      Detected
+                    </span>
+                  )}
+                  {isMatch && (
+                    <span className="absolute -top-1.5 -right-1.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 leading-none">
+                      Match
+                    </span>
+                  )}
+                  <span className="font-medium block">{m.label}</span>
+                  <span className="text-muted-foreground block mt-0.5 leading-tight">
+                    {m.desc}
+                  </span>
+                </button>
+              );
+            })}
           </div>
           {s.motivator && (
             <div className="mt-2 bg-muted/30 rounded px-3 py-2 text-xs text-muted-foreground">
@@ -281,25 +452,44 @@ export function StepProduct() {
         <div>
           <label className="text-sm font-medium">Emotional Tone</label>
           <div className="flex flex-wrap gap-2 mt-2">
-            {EMOTIONAL_TONES.map((t) => (
-              <button
-                key={t.value}
-                onClick={() =>
-                  dispatch({
-                    type: "SET_FIELD",
-                    field: "emotionalTone",
-                    value: s.emotionalTone === t.value ? "" : t.value,
-                  })
-                }
-                className={`px-3 py-1.5 rounded-md border text-xs transition-colors ${
-                  s.emotionalTone === t.value
-                    ? "border-blue-500 bg-blue-500/10 text-blue-300"
-                    : "border-border hover:border-muted-foreground"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+            {EMOTIONAL_TONES.map((t) => {
+              const isDetected = detected.tone === t.value;
+              const isSelected = s.emotionalTone === t.value;
+              const isMatch = isSelected && isDetected;
+              return (
+                <button
+                  key={t.value}
+                  onClick={() =>
+                    dispatch({
+                      type: "SET_FIELD",
+                      field: "emotionalTone",
+                      value: s.emotionalTone === t.value ? "" : t.value,
+                    })
+                  }
+                  className={`px-3 py-1.5 rounded-md border text-xs transition-colors relative ${
+                    isMatch
+                      ? "border-green-500 bg-green-500/15 text-green-300 ring-1 ring-green-500/30"
+                      : isSelected
+                      ? "border-blue-500 bg-blue-500/10 text-blue-300"
+                      : isDetected
+                      ? "border-amber-500/40 bg-amber-500/5 text-foreground"
+                      : "border-border hover:border-muted-foreground"
+                  }`}
+                >
+                  {isDetected && !isSelected && (
+                    <span className="absolute -top-1.5 -right-1.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 leading-none">
+                      Detected
+                    </span>
+                  )}
+                  {isMatch && (
+                    <span className="absolute -top-1.5 -right-1.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 leading-none">
+                      Match
+                    </span>
+                  )}
+                  {t.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -307,28 +497,47 @@ export function StepProduct() {
         <div>
           <label className="text-sm font-medium">Storyline Type</label>
           <div className="flex flex-wrap gap-2 mt-2">
-            {STORYLINE_TYPES.map((st) => (
-              <button
-                key={st.value}
-                onClick={() =>
-                  dispatch({
-                    type: "SET_FIELD",
-                    field: "storylineType",
-                    value: s.storylineType === st.value ? "" : st.value,
-                  })
-                }
-                className={`px-3 py-1.5 rounded-md border text-xs transition-colors ${
-                  s.storylineType === st.value
-                    ? "border-purple-500 bg-purple-500/10 text-purple-300"
-                    : "border-border hover:border-muted-foreground"
-                }`}
-              >
-                <span className="font-medium">{st.label}</span>
-                <span className="text-muted-foreground ml-1">
-                  — {st.desc}
-                </span>
-              </button>
-            ))}
+            {STORYLINE_TYPES.map((st) => {
+              const isDetected = detected.storyline === st.value;
+              const isSelected = s.storylineType === st.value;
+              const isMatch = isSelected && isDetected;
+              return (
+                <button
+                  key={st.value}
+                  onClick={() =>
+                    dispatch({
+                      type: "SET_FIELD",
+                      field: "storylineType",
+                      value: s.storylineType === st.value ? "" : st.value,
+                    })
+                  }
+                  className={`px-3 py-1.5 rounded-md border text-xs transition-colors relative ${
+                    isMatch
+                      ? "border-green-500 bg-green-500/15 text-green-300 ring-1 ring-green-500/30"
+                      : isSelected
+                      ? "border-purple-500 bg-purple-500/10 text-purple-300"
+                      : isDetected
+                      ? "border-amber-500/40 bg-amber-500/5 text-foreground"
+                      : "border-border hover:border-muted-foreground"
+                  }`}
+                >
+                  {isDetected && !isSelected && (
+                    <span className="absolute -top-1.5 -right-1.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 leading-none">
+                      Detected
+                    </span>
+                  )}
+                  {isMatch && (
+                    <span className="absolute -top-1.5 -right-1.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 leading-none">
+                      Match
+                    </span>
+                  )}
+                  <span className="font-medium">{st.label}</span>
+                  <span className="text-muted-foreground ml-1">
+                    — {st.desc}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
