@@ -1,14 +1,63 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Loader2, Sparkles, RotateCcw } from "lucide-react";
+import { Loader2, Sparkles, RotateCcw, FileText } from "lucide-react";
 import { useStudio } from "../_state/context";
 import { useAnalysis } from "../_hooks/useAnalysis";
 import { AnalysisSkeleton } from "./SkeletonPanels";
 import { GeminiErrorBanner } from "./GeminiErrorBanner";
 import { BlueprintSelector } from "./BlueprintSelector";
+import type { VideoAnalysis } from "@/lib/studio/types";
 
 const ANALYSIS_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+
+/**
+ * Parse a raw user-provided script into a VideoAnalysis structure.
+ * Handles various formats: simple voiceover, detailed scripts with directions, etc.
+ * Splits on blank lines or numbered lines to create scene entries.
+ */
+function parseProvidedScript(raw: string): VideoAnalysis {
+  const lines = raw.trim().split("\n");
+  const scenes: { visual: string; speech: string }[] = [];
+  let currentBlock: string[] = [];
+
+  function flushBlock() {
+    if (currentBlock.length === 0) return;
+    const text = currentBlock.join("\n").trim();
+    if (!text) return;
+    scenes.push({ visual: text, speech: text });
+    currentBlock = [];
+  }
+
+  for (const line of lines) {
+    // Split on blank lines or lines that start with a number/scene marker
+    if (line.trim() === "") {
+      flushBlock();
+    } else if (/^(scene\s*\d+|#|\d+[\.\):])/i.test(line.trim()) && currentBlock.length > 0) {
+      flushBlock();
+      currentBlock.push(line);
+    } else {
+      currentBlock.push(line);
+    }
+  }
+  flushBlock();
+
+  // If no splits were found, treat the whole thing as one scene
+  if (scenes.length === 0) {
+    scenes.push({ visual: raw.trim(), speech: raw.trim() });
+  }
+
+  return {
+    musicAndPacing: "From provided script",
+    sceneBreakdown: scenes.map((sc, i) => ({
+      scene_id: i + 1,
+      type: "A-Roll",
+      time: `Scene ${i + 1}`,
+      visual: sc.visual,
+      speech: sc.speech,
+    })),
+  };
+}
 
 export function StepAnalyze() {
   const { s, dispatch } = useStudio();
@@ -66,14 +115,29 @@ export function StepAnalyze() {
           </h2>
           <BlueprintSelector type="analyze" />
         </div>
-        <button
-          onClick={extractFrames}
-          disabled={isBusy}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium"
-        >
-          {buttonIcon}
-          {buttonLabel}
-        </button>
+        <div className="flex items-center gap-2">
+          {s.providedScript.trim() && (
+            <button
+              onClick={() => {
+                const analysis = parseProvidedScript(s.providedScript);
+                dispatch({ type: "SET_ANALYSIS", analysis });
+              }}
+              disabled={isBusy}
+              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium"
+            >
+              <FileText size={16} />
+              Use Provided Script
+            </button>
+          )}
+          <button
+            onClick={extractFrames}
+            disabled={isBusy}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium"
+          >
+            {buttonIcon}
+            {buttonLabel}
+          </button>
+        </div>
       </div>
 
       {s.analyzeError && (

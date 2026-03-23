@@ -17,12 +17,12 @@ import {
 } from "lucide-react";
 import { useStudio } from "../_state/context";
 import { useAssetGeneration } from "../_hooks/useAssetGeneration";
-import { VOICES } from "../_constants";
 import { PreviewModal } from "./PreviewModal";
 import { SaveAssetButton } from "./SaveAssetButton";
 import { AssetPicker } from "./AssetPicker";
 import { GeminiErrorBanner } from "./GeminiErrorBanner";
 import { BlueprintSelector } from "./BlueprintSelector";
+import { VoicePicker } from "./VoicePicker";
 
 export function StepGenerate() {
   const { s, dispatch } = useStudio();

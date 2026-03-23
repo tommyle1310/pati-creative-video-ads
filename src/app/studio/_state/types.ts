@@ -20,6 +20,7 @@ export interface StudioState {
   selectedAdBrand: string | null;
   uploadedVideoUrl: string | null;
   uploadedVideoFile: File | null;
+  providedScript: string;
   // Step 2
   frames: string[];
   analysis: VideoAnalysis | null;
@@ -48,6 +49,8 @@ export interface StudioState {
   // Step 6
   aspectRatio: "9:16" | "16:9" | "1:1";
   voice: string;
+  voiceSource: "gemini" | "elevenlabs";
+  voiceName: string;
   videoModel: VideoModel;
   // uploaded vidtory URLs (cached so we don't re-upload)
   productVidtoryUrl: string | null;

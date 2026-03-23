@@ -442,7 +442,7 @@ IMPORTANT: This is a video AD — scenes change rapidly (every 1-4 seconds). Cut
   // Add audio track FIRST if available (Gemini processes audio for transcription)
   if (hasAudio) {
     parts.push({
-      inlineData: { mimeType: "audio/mp3", data: audioBase64 },
+      inlineData: { mimeType: "audio/wav", data: audioBase64 },
     });
   }
 

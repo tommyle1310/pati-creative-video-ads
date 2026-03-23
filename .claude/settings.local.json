@@ -49,7 +49,10 @@
       "Bash(curl -s -X POST http://localhost:3000/api/studio/blueprints -H \"Content-Type: application/json\" -d '{\"\"title\"\":\"\"Test\"\",\"\"content\"\":\"\"test content\"\",\"\"type\"\":\"\"analyze\"\"}')",
       "Bash(node -e \":*)",
       "Bash(grep -r \"kling\\\\|KIE\\\\|klingai\\\\|KlingVideo\" /d/jobs/pati/creative-project/src --include=*.ts --include=*.tsx)",
-      "WebFetch(domain:docs.kie.ai)"
+      "WebFetch(domain:docs.kie.ai)",
+      "Bash(find /d/jobs/pati/creative-project/src/app/studio -name *constants* -o -name *constant*)",
+      "Bash(ls -la /d/jobs/pati/creative-project/src/components/ui/popover*)",
+      "Bash(npx shadcn@latest add popover --yes)"
     ]
   }
 }

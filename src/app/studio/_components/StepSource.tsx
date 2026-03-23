@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Database, Upload, Trash2 } from "lucide-react";
+import { Database, Upload, Trash2, FileText } from "lucide-react";
 import { useStudio } from "../_state/context";
 import { SourceChangeDialog } from "./SourceChangeDialog";
 import { useProjectPersistence } from "../_hooks/useProjectPersistence";
@@ -142,6 +142,26 @@ export function StepSource() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Provided Script */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <FileText size={18} />
+          <h3 className="font-medium">Provide Script (Optional)</h3>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Paste a voiceover script, detailed script with directions, or any script format.
+          This can be used in Step 2 instead of AI-extracted analysis.
+        </p>
+        <textarea
+          value={s.providedScript}
+          onChange={(e) =>
+            dispatch({ type: "SET_FIELD", field: "providedScript", value: e.target.value })
+          }
+          placeholder={"Paste your script here...\n\nExamples:\n- Simple voiceover script\n- Detailed script with scene directions, camera angles, character notes\n- Any format — the AI will adapt"}
+          className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm min-h-[120px] resize-y placeholder:text-muted-foreground/50"
+        />
       </div>
 
       <SourceChangeDialog

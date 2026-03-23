@@ -99,6 +99,7 @@ export function reducer(state: StudioState, action: Action): StudioState {
         selectedAdBrand: null,
         uploadedVideoUrl: null,
         uploadedVideoFile: null,
+        providedScript: "",
       };
     case "RESET_PROGRESS":
       return {
