@@ -6,9 +6,9 @@ import {
   LayoutDashboard,
   TrendingUp,
   Bookmark,
-  Columns2,
   FileText,
   Clapperboard,
+  Building2,
   Settings,
 } from "lucide-react";
 
@@ -16,8 +16,8 @@ const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { href: "/trending", label: "Trending", Icon: TrendingUp },
   { href: "/studio", label: "Studio", Icon: Clapperboard },
+  { href: "/brand-products", label: "Brands", Icon: Building2 },
   { href: "/saved", label: "Saved", Icon: Bookmark },
-  // { href: "/compare", label: "Compare", Icon: Columns2 },
   { href: "/briefs", label: "Briefs", Icon: FileText },
   { href: "/settings", label: "Settings", Icon: Settings },
 ];

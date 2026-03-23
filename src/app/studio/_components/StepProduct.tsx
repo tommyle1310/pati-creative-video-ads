@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronRight,
   Eye,
+  Trash2,
 } from "lucide-react";
 import { useStudio } from "../_state/context";
 import { useLandingPageScrape } from "../_hooks/useLandingPageScrape";
@@ -93,6 +94,36 @@ function useDetectedStrategy(adAnalysis: AdAnalysis | undefined) {
   }, [adAnalysis]);
 }
 
+// ── Brand/Product auto-fill types ──
+
+interface BrandProduct {
+  id: string;
+  name: string;
+  landingPageUrls: string[];
+  images: string[];
+  bigIdea: string | null;
+  productInfo: string | null;
+  targetAudience: string | null;
+}
+
+interface BrandOption {
+  id: string;
+  name: string;
+  products: BrandProduct[];
+}
+
+// ── Analysis field display ──
+
+function AnalysisRefField({ label, content }: { label: string; content?: string }) {
+  if (!content) return null;
+  return (
+    <div className="rounded-md border border-border/50 bg-background/50 p-3">
+      <h4 className="text-[11px] font-semibold uppercase text-muted-foreground mb-1">{label}</h4>
+      <p className="text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap">{content}</p>
+    </div>
+  );
+}
+
 export function StepProduct() {
   const { s, dispatch } = useStudio();
   const {
@@ -107,17 +138,61 @@ export function StepProduct() {
   const detected = useDetectedStrategy(adAnalysis);
   const [showAnalysisRef, setShowAnalysisRef] = useState(true);
 
+  // Brand/product auto-fill
+  const [brands, setBrands] = useState<BrandOption[]>([]);
+  const [selectedBrandId, setSelectedBrandId] = useState("");
+  const [selectedProductId, setSelectedProductId] = useState("");
+
   // Auto-populate URLs from saved product profiles on mount
-  useEffect(() => { loadSavedProfileUrls(); }, []);
+  useEffect(() => { loadSavedProfileUrls(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch brands for auto-fill
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/brand-config");
+        if (res.ok) {
+          const data = await res.json();
+          setBrands(
+            (data.brands || []).filter(
+              (b: BrandOption) => b.products.length > 0
+            )
+          );
+        }
+      } catch {
+        /* silent */
+      }
+    })();
+  }, []);
+
+  const selectedBrand = brands.find((b) => b.id === selectedBrandId);
+  const selectedProduct = selectedBrand?.products.find(
+    (p) => p.id === selectedProductId
+  );
+
+  const handleAutoFill = () => {
+    if (!selectedProduct) return;
+    if (selectedProduct.bigIdea)
+      dispatch({ type: "SET_FIELD", field: "bigIdea", value: selectedProduct.bigIdea });
+    if (selectedProduct.productInfo)
+      dispatch({ type: "SET_FIELD", field: "productInfo", value: selectedProduct.productInfo });
+    if (selectedProduct.targetAudience)
+      dispatch({ type: "SET_FIELD", field: "targetAudience", value: selectedProduct.targetAudience });
+    if (selectedProduct.landingPageUrls?.length)
+      dispatch({ type: "SET_FIELD", field: "landingPageUrls", value: selectedProduct.landingPageUrls });
+    if (selectedProduct.images?.length && selectedProduct.images[0])
+      dispatch({ type: "SET_PRODUCT_IMAGE", data: selectedProduct.images[0] });
+  };
 
   const handleImageUpload = useCallback(
     async (
       e: React.ChangeEvent<HTMLInputElement>,
       field: "SET_PRODUCT_IMAGE" | "SET_CREATOR_IMAGE"
     ) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const base64 = await fileToBase64(file);
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+      // For product image: use first file as primary
+      const base64 = await fileToBase64(files[0]);
       dispatch({ type: field, data: base64 });
     },
     [dispatch]
@@ -126,6 +201,56 @@ export function StepProduct() {
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold">Product & Creator Setup</h2>
+
+      {/* Brand/Product auto-fill */}
+      {brands.length > 0 && (
+        <div className="flex items-end gap-3 p-3 rounded-lg border border-blue-500/20 bg-blue-500/5">
+          <div className="flex-1">
+            <label className="text-xs font-medium text-blue-400 mb-1 block">
+              Auto-fill from saved brand
+            </label>
+            <div className="flex gap-2">
+              <select
+                value={selectedBrandId}
+                onChange={(e) => {
+                  setSelectedBrandId(e.target.value);
+                  setSelectedProductId("");
+                }}
+                className="flex-1 bg-background border border-border rounded px-3 py-1.5 text-sm"
+              >
+                <option value="">Select brand...</option>
+                {brands.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+              {selectedBrand && (
+                <select
+                  value={selectedProductId}
+                  onChange={(e) => setSelectedProductId(e.target.value)}
+                  className="flex-1 bg-background border border-border rounded px-3 py-1.5 text-sm"
+                >
+                  <option value="">Select product...</option>
+                  {selectedBrand.products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={handleAutoFill}
+            disabled={!selectedProduct}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-1.5 rounded-md text-xs font-medium shrink-0"
+          >
+            <Sparkles size={12} />
+            Auto-fill
+          </button>
+        </div>
+      )}
 
       {/* Original Ad Analysis Reference */}
       {adAnalysis && (
@@ -153,30 +278,14 @@ export function StepProduct() {
           {showAnalysisRef && (
             <div className="px-4 pb-4 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {adAnalysis.concept && (
-                  <div className="rounded-md border border-border/50 bg-background/50 p-3">
-                    <h4 className="text-[11px] font-semibold uppercase text-muted-foreground mb-1">Concept / Big Idea</h4>
-                    <p className="text-xs text-foreground/80 leading-relaxed">{adAnalysis.concept}</p>
-                  </div>
-                )}
-                {adAnalysis.hook && (
-                  <div className="rounded-md border border-border/50 bg-background/50 p-3">
-                    <h4 className="text-[11px] font-semibold uppercase text-muted-foreground mb-1">Hook</h4>
-                    <p className="text-xs text-foreground/80 leading-relaxed">{adAnalysis.hook}</p>
-                  </div>
-                )}
-                {adAnalysis.psychology && (
-                  <div className="rounded-md border border-border/50 bg-background/50 p-3">
-                    <h4 className="text-[11px] font-semibold uppercase text-muted-foreground mb-1">Psychology</h4>
-                    <p className="text-xs text-foreground/80 leading-relaxed">{adAnalysis.psychology}</p>
-                  </div>
-                )}
-                {adAnalysis.cta && (
-                  <div className="rounded-md border border-border/50 bg-background/50 p-3">
-                    <h4 className="text-[11px] font-semibold uppercase text-muted-foreground mb-1">CTA</h4>
-                    <p className="text-xs text-foreground/80 leading-relaxed">{adAnalysis.cta}</p>
-                  </div>
-                )}
+                <AnalysisRefField label="Concept / Big Idea" content={adAnalysis.concept} />
+                <AnalysisRefField label="Hook" content={adAnalysis.hook} />
+                <AnalysisRefField label="Psychology" content={adAnalysis.psychology} />
+                <AnalysisRefField label="CTA" content={adAnalysis.cta} />
+                <AnalysisRefField label="Visual Strategy" content={adAnalysis.visual} />
+                <AnalysisRefField label="Script Breakdown" content={adAnalysis.scriptBreakdown} />
+                <AnalysisRefField label="Key Takeaways" content={adAnalysis.keyTakeaways} />
+                <AnalysisRefField label="Production Formula" content={adAnalysis.productionFormula} />
               </div>
               {/* Classification badges */}
               <div className="flex flex-wrap gap-2">
@@ -202,19 +311,32 @@ export function StepProduct() {
           <label className="text-sm font-medium">
             Product Image <span className="text-red-400">*</span>
           </label>
-          <label className="block border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-muted-foreground transition-colors">
+          <label className="block border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-muted-foreground transition-colors relative group">
             <input
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
               onChange={(e) => handleImageUpload(e, "SET_PRODUCT_IMAGE")}
             />
             {s.productImage ? (
-              <img
-                src={s.productImage}
-                alt="Product"
-                className="h-32 mx-auto rounded"
-              />
+              <>
+                <img
+                  src={s.productImage}
+                  alt="Product"
+                  className="h-32 mx-auto rounded"
+                />
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dispatch({ type: "SET_PRODUCT_IMAGE", data: "" });
+                  }}
+                  className="absolute top-2 right-2 bg-red-500/90 hover:bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
             ) : (
               <>
                 <ImageIcon
@@ -234,7 +356,7 @@ export function StepProduct() {
           <label className="text-sm font-medium">
             Creator/Character Image (optional)
           </label>
-          <label className="block border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-muted-foreground transition-colors">
+          <label className="block border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-muted-foreground transition-colors relative group">
             <input
               type="file"
               accept="image/*"
@@ -242,11 +364,23 @@ export function StepProduct() {
               onChange={(e) => handleImageUpload(e, "SET_CREATOR_IMAGE")}
             />
             {s.creatorImage ? (
-              <img
-                src={s.creatorImage}
-                alt="Creator"
-                className="h-32 mx-auto rounded"
-              />
+              <>
+                <img
+                  src={s.creatorImage}
+                  alt="Creator"
+                  className="h-32 mx-auto rounded"
+                />
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dispatch({ type: "SET_CREATOR_IMAGE", data: "" });
+                  }}
+                  className="absolute top-2 right-2 bg-red-500/90 hover:bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </>
             ) : (
               <>
                 <ImageIcon

@@ -181,6 +181,49 @@ model ProductProfile {
   updatedAt       DateTime @updatedAt
 }
 
+model Brand {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  logoUrl    String?
+  products   Product[]
+  characters Character[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model Product {
+  id              String   @id @default(cuid())
+  brandId         String
+  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name            String
+  landingPageUrls String[]
+  images          String[] // base64 or hosted URLs
+  bigIdea         String?  @db.Text
+  productInfo     String?  @db.Text
+  targetAudience  String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([brandId, name])
+  @@index([brandId])
+}
+
+model Character {
+  id          String   @id @default(cuid())
+  brandId     String?
+  brand       Brand?   @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  name        String
+  description String?  @db.Text
+  imageUrl    String?  @db.Text
+  voiceId     String?
+  voiceSource String?  // "gemini" | "elevenlabs"
+  voiceName   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([brandId])
+}
+
 model StudioProject {
   id        String   @id @default(cuid())
   name      String

@@ -48,7 +48,13 @@ export async function POST(req: NextRequest) {
     // ElevenLabs requires text to be at least 100 characters
     let sampleText = text;
     if (sampleText.length < 100) {
-      sampleText = sampleText.padEnd(100, ". This voice is designed for high-quality narration and advertisements");
+      sampleText = sampleText + " This voice is designed for high-quality narration and advertisement content for engaging video productions and commercial spots.";
+    }
+
+    // voice_description also needs minimum length for the API
+    let voiceDesc = description || name;
+    if (voiceDesc.length < 100) {
+      voiceDesc = voiceDesc + " A versatile voice suitable for advertisements, narration, and video content with clear articulation and engaging delivery.";
     }
 
     // Use voice design (text-to-voice) to create a voice from a prompt
@@ -59,7 +65,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        voice_description: description || name,
+        voice_description: voiceDesc,
         text: sampleText,
       }),
     });
