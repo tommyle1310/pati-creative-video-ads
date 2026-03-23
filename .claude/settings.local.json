@@ -53,7 +53,8 @@
       "Bash(find /d/jobs/pati/creative-project/src/app/studio -name *constants* -o -name *constant*)",
       "Bash(ls -la /d/jobs/pati/creative-project/src/components/ui/popover*)",
       "Bash(npx shadcn@latest add popover --yes)",
-      "Bash(find /d/jobs/pati/creative-project/src/app/studio/_state -type f -name *.ts -o -name *.tsx)"
+      "Bash(find /d/jobs/pati/creative-project/src/app/studio/_state -type f -name *.ts -o -name *.tsx)",
+      "Bash(xargs grep:*)"
     ]
   }
 }

@@ -14,9 +14,12 @@ const SETTINGS_PATH = path.join(process.cwd(), ".tmp", "settings.json");
 
 type ImageProvider = "vidtory" | "kie";
 type VideoProvider = "vidtory" | "kie";
+type AiProvider = "gemini" | "claude";
 
 interface Settings {
   geminiApiKey?: string;
+  anthropicApiKey?: string;
+  aiProvider?: AiProvider;
   imageApiKey?: string;
   imageProvider?: ImageProvider;
   videoApiKey?: string;
@@ -55,9 +58,11 @@ function readEnvKey(name: string): string | undefined {
 export async function GET() {
   const settings = readSettings();
   const envGemini = process.env.GEMINI_API_KEY;
+  const envAnthropic = process.env.ANTHROPIC_API_KEY;
   const envVidtory = process.env.VIDTORY_API_KEY;
 
   const hasCustomGemini = !!settings.geminiApiKey;
+  const hasCustomAnthropic = !!settings.anthropicApiKey;
   const hasCustomImage = !!settings.imageApiKey;
   const hasCustomVideo = !!settings.videoApiKey;
 
@@ -65,6 +70,12 @@ export async function GET() {
     geminiApiKey: maskKey(hasCustomGemini ? settings.geminiApiKey : envGemini),
     isUsingCustomGeminiKey: hasCustomGemini,
     hasEnvGeminiKey: !!envGemini,
+
+    anthropicApiKey: maskKey(hasCustomAnthropic ? settings.anthropicApiKey : envAnthropic),
+    isUsingCustomAnthropicKey: hasCustomAnthropic,
+    hasEnvAnthropicKey: !!envAnthropic,
+
+    aiProvider: settings.aiProvider || "gemini",
 
     imageApiKey: maskKey(hasCustomImage ? settings.imageApiKey : envVidtory),
     imageProvider: settings.imageProvider || "vidtory",
@@ -87,6 +98,17 @@ export async function POST(request: NextRequest) {
     if (body.geminiApiKey && typeof body.geminiApiKey === "string" && body.geminiApiKey.trim()) {
       settings.geminiApiKey = body.geminiApiKey.trim();
       process.env.GEMINI_API_KEY = settings.geminiApiKey;
+    }
+
+    // Anthropic key
+    if (body.anthropicApiKey && typeof body.anthropicApiKey === "string" && body.anthropicApiKey.trim()) {
+      settings.anthropicApiKey = body.anthropicApiKey.trim();
+      process.env.ANTHROPIC_API_KEY = settings.anthropicApiKey;
+    }
+
+    // AI provider toggle
+    if (body.aiProvider && ["gemini", "claude"].includes(body.aiProvider)) {
+      settings.aiProvider = body.aiProvider;
     }
 
     // Image key + provider
@@ -113,6 +135,9 @@ export async function POST(request: NextRequest) {
       ok: true,
       geminiApiKey: maskKey(settings.geminiApiKey || process.env.GEMINI_API_KEY),
       isUsingCustomGeminiKey: !!settings.geminiApiKey,
+      anthropicApiKey: maskKey(settings.anthropicApiKey || process.env.ANTHROPIC_API_KEY),
+      isUsingCustomAnthropicKey: !!settings.anthropicApiKey,
+      aiProvider: settings.aiProvider || "gemini",
       imageApiKey: maskKey(settings.imageApiKey || envVidtory),
       imageProvider: settings.imageProvider || "vidtory",
       isUsingCustomImageKey: !!settings.imageApiKey,
@@ -137,6 +162,12 @@ export async function DELETE(request: NextRequest) {
       const envKey = readEnvKey("GEMINI_API_KEY");
       if (envKey) process.env.GEMINI_API_KEY = envKey;
     }
+    if (target === "anthropic" || target === "all") {
+      delete settings.anthropicApiKey;
+      delete settings.aiProvider;
+      const envKey = readEnvKey("ANTHROPIC_API_KEY");
+      if (envKey) process.env.ANTHROPIC_API_KEY = envKey;
+    }
     if (target === "image" || target === "all") {
       delete settings.imageApiKey;
       delete settings.imageProvider;
@@ -154,6 +185,9 @@ export async function DELETE(request: NextRequest) {
       ok: true,
       geminiApiKey: maskKey(process.env.GEMINI_API_KEY),
       isUsingCustomGeminiKey: !!settings.geminiApiKey,
+      anthropicApiKey: maskKey(settings.anthropicApiKey || process.env.ANTHROPIC_API_KEY),
+      isUsingCustomAnthropicKey: !!settings.anthropicApiKey,
+      aiProvider: settings.aiProvider || "gemini",
       imageApiKey: maskKey(settings.imageApiKey || envVidtory),
       imageProvider: settings.imageProvider || "vidtory",
       isUsingCustomImageKey: !!settings.imageApiKey,

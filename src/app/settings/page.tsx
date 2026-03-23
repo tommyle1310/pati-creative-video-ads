@@ -1,14 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Settings, Loader2, Key, RotateCcw, Check, AlertCircle, Image, Video } from "lucide-react";
+import { Settings, Loader2, Key, RotateCcw, Check, AlertCircle, Image, Video, Brain } from "lucide-react";
 
 type Provider = "vidtory" | "kie";
+type AiProvider = "gemini" | "claude";
 
 interface SettingsData {
   geminiApiKey: string;
   isUsingCustomGeminiKey: boolean;
   hasEnvGeminiKey: boolean;
+  anthropicApiKey: string;
+  isUsingCustomAnthropicKey: boolean;
+  hasEnvAnthropicKey: boolean;
+  aiProvider: AiProvider;
   imageApiKey: string;
   imageProvider: Provider;
   isUsingCustomImageKey: boolean;
@@ -25,15 +30,19 @@ export default function SettingsPage() {
 
   // Per-section state
   const [geminiKey, setGeminiKey] = useState("");
+  const [anthropicKey, setAnthropicKey] = useState("");
+  const [aiProvider, setAiProvider] = useState<AiProvider>("gemini");
   const [imageKey, setImageKey] = useState("");
   const [imageProvider, setImageProvider] = useState<Provider>("vidtory");
   const [videoKey, setVideoKey] = useState("");
   const [videoProvider, setVideoProvider] = useState<Provider>("vidtory");
 
   const [savingGemini, setSavingGemini] = useState(false);
+  const [savingAnthropic, setSavingAnthropic] = useState(false);
   const [savingImage, setSavingImage] = useState(false);
   const [savingVideo, setSavingVideo] = useState(false);
   const [resettingGemini, setResettingGemini] = useState(false);
+  const [resettingAnthropic, setResettingAnthropic] = useState(false);
   const [resettingImage, setResettingImage] = useState(false);
   const [resettingVideo, setResettingVideo] = useState(false);
 
@@ -42,6 +51,7 @@ export default function SettingsPage() {
       .then((r) => r.json())
       .then((d: SettingsData) => {
         setData(d);
+        setAiProvider(d.aiProvider || "gemini");
         setImageProvider(d.imageProvider || "vidtory");
         setVideoProvider(d.videoProvider || "vidtory");
       })
@@ -53,14 +63,17 @@ export default function SettingsPage() {
     setTimeout(() => setMessage(null), 4000);
   }, []);
 
-  async function handleSave(section: "gemini" | "image" | "video") {
-    const setLoading = section === "gemini" ? setSavingGemini : section === "image" ? setSavingImage : setSavingVideo;
+  async function handleSave(section: "gemini" | "anthropic" | "image" | "video") {
+    const setLoading = section === "gemini" ? setSavingGemini : section === "anthropic" ? setSavingAnthropic : section === "image" ? setSavingImage : setSavingVideo;
     setLoading(true);
     try {
       const body: Record<string, string> = {};
       if (section === "gemini") {
         if (!geminiKey.trim()) return;
         body.geminiApiKey = geminiKey.trim();
+      } else if (section === "anthropic") {
+        if (!anthropicKey.trim()) return;
+        body.anthropicApiKey = anthropicKey.trim();
       } else if (section === "image") {
         if (!imageKey.trim()) return;
         body.imageApiKey = imageKey.trim();
@@ -81,10 +94,11 @@ export default function SettingsPage() {
 
       setData((prev) => prev ? { ...prev, ...result } : prev);
       if (section === "gemini") setGeminiKey("");
+      else if (section === "anthropic") setAnthropicKey("");
       else if (section === "image") setImageKey("");
       else setVideoKey("");
 
-      const labels = { gemini: "Gemini", image: "Image generation", video: "Video generation" };
+      const labels = { gemini: "Gemini", anthropic: "Anthropic", image: "Image generation", video: "Video generation" };
       showMessage("success", `${labels[section]} API key saved`);
     } catch (err) {
       showMessage("error", err instanceof Error ? err.message : "Failed to save");
@@ -115,8 +129,25 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleReset(section: "gemini" | "image" | "video") {
-    const setLoading = section === "gemini" ? setResettingGemini : section === "image" ? setResettingImage : setResettingVideo;
+  async function handleSaveAiProvider(provider: AiProvider) {
+    setAiProvider(provider);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aiProvider: provider }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error);
+      setData((prev) => prev ? { ...prev, ...result } : prev);
+      showMessage("success", `AI provider set to ${provider === "claude" ? "Claude" : "Gemini"}`);
+    } catch {
+      setAiProvider(data?.aiProvider || "gemini");
+    }
+  }
+
+  async function handleReset(section: "gemini" | "anthropic" | "image" | "video") {
+    const setLoading = section === "gemini" ? setResettingGemini : section === "anthropic" ? setResettingAnthropic : section === "image" ? setResettingImage : setResettingVideo;
     setLoading(true);
     try {
       const res = await fetch("/api/settings", {
@@ -127,6 +158,7 @@ export default function SettingsPage() {
       const result = await res.json();
       if (!res.ok) throw new Error(result.error);
       setData((prev) => prev ? { ...prev, ...result } : prev);
+      if (section === "anthropic") setAiProvider("gemini");
       if (section === "image") setImageProvider("vidtory");
       if (section === "video") setVideoProvider("vidtory");
       showMessage("success", `Reset to default .env key`);
@@ -157,6 +189,47 @@ export default function SettingsPage() {
       )}
 
       <div className="max-w-xl space-y-6">
+        {/* ── AI Provider ── */}
+        <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <Brain size={18} className="text-violet-400" />
+            <h2 className="text-lg font-semibold">AI Provider</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Choose which LLM powers analysis, script, storyboard, and prompt enhancement.
+            TTS always uses Gemini or ElevenLabs regardless of this setting.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleSaveAiProvider("gemini")}
+              className={`flex-1 px-3 py-2.5 rounded-md text-sm font-medium border transition-colors cursor-pointer ${
+                aiProvider === "gemini"
+                  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                  : "bg-muted/30 border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span className="block font-semibold">Gemini</span>
+              <span className="block text-[10px] mt-0.5 opacity-70">Google Gemini 2.5 Flash</span>
+            </button>
+            <button
+              onClick={() => handleSaveAiProvider("claude")}
+              className={`flex-1 px-3 py-2.5 rounded-md text-sm font-medium border transition-colors cursor-pointer ${
+                aiProvider === "claude"
+                  ? "bg-violet-500/15 border-violet-500/40 text-violet-400"
+                  : "bg-muted/30 border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span className="block font-semibold">Claude</span>
+              <span className="block text-[10px] mt-0.5 opacity-70">Anthropic Sonnet 4</span>
+            </button>
+          </div>
+          {aiProvider === "claude" && (
+            <p className="text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2">
+              Claude does not support audio transcription — frame analysis will rely on visible text overlays only.
+            </p>
+          )}
+        </div>
+
         {/* ── Gemini API Key ── */}
         <div className="bg-card border border-border rounded-lg p-6 space-y-4">
           <div className="flex items-center gap-2">
@@ -164,7 +237,9 @@ export default function SettingsPage() {
             <h2 className="text-lg font-semibold">Gemini API Key</h2>
           </div>
           <p className="text-sm text-muted-foreground">
-            Used for video analysis, script generation, storyboard, TTS, and prompt enhancement.
+            {aiProvider === "gemini"
+              ? "Used for video analysis, script generation, storyboard, TTS, and prompt enhancement."
+              : "Used for TTS (text-to-speech) even when Claude is the active AI provider."}
           </p>
 
           {data && (
@@ -209,6 +284,63 @@ export default function SettingsPage() {
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 cursor-pointer"
             >
               {resettingGemini ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+              Reset to default key
+            </button>
+          )}
+        </div>
+
+        {/* ── Anthropic API Key ── */}
+        <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <Key size={18} className="text-violet-400" />
+            <h2 className="text-lg font-semibold">Anthropic API Key</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Required when Claude is selected as the AI provider. Used for analysis, script, storyboard, and prompt enhancement.
+          </p>
+
+          {data && (
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm ${
+              data.isUsingCustomAnthropicKey
+                ? "bg-violet-500/10 border border-violet-500/30 text-violet-400"
+                : "bg-muted/50 border border-border text-muted-foreground"
+            }`}>
+              <span className="font-mono text-xs">{data.anthropicApiKey || "Not set"}</span>
+              <span className="text-[10px] ml-auto">
+                {data.isUsingCustomAnthropicKey ? "Custom key" : data.hasEnvAnthropicKey ? "Default (.env)" : "Not configured"}
+              </span>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Enter new API key</label>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                value={anthropicKey}
+                onChange={(e) => setAnthropicKey(e.target.value)}
+                placeholder="sk-ant-..."
+                className="flex-1 bg-background border border-border rounded px-3 py-2 text-sm font-mono"
+                onKeyDown={(e) => e.key === "Enter" && handleSave("anthropic")}
+              />
+              <button
+                onClick={() => handleSave("anthropic")}
+                disabled={!anthropicKey.trim() || savingAnthropic}
+                className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white px-4 py-2 rounded-md text-sm font-medium cursor-pointer"
+              >
+                {savingAnthropic ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                Save
+              </button>
+            </div>
+          </div>
+
+          {data?.isUsingCustomAnthropicKey && (
+            <button
+              onClick={() => handleReset("anthropic")}
+              disabled={resettingAnthropic}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {resettingAnthropic ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
               Reset to default key
             </button>
           )}

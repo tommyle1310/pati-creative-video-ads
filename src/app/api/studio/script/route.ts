@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateClonedScript } from "@/lib/studio/gemini";
+import { generateClonedScript as geminiScript } from "@/lib/studio/gemini";
+import { generateClonedScript as claudeScript } from "@/lib/studio/claude";
+import { getAiProvider } from "@/lib/studio/ai-provider";
 import { getActivePrompt } from "@/lib/studio/blueprints";
 
 export const maxDuration = 300;
@@ -14,11 +16,14 @@ export async function POST(req: NextRequest) {
     }
 
     const systemInstruction = await getActivePrompt("script");
+    const overrides = systemInstruction ? { systemInstruction } : undefined;
 
-    const scenes = await generateClonedScript(
+    const provider = getAiProvider();
+    const generate = provider === "claude" ? claudeScript : geminiScript;
+    const scenes = await generate(
       analysis, bigIdea, productImage, productInfo, targetAudience, creatorImage,
       { motivator, emotionalTone, storylineType },
-      systemInstruction ? { systemInstruction } : undefined
+      overrides
     );
     return NextResponse.json({ scenes });
   } catch (e: unknown) {

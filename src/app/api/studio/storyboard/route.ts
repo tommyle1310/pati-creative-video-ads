@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateClonedStoryboard } from "@/lib/studio/gemini";
+import { generateClonedStoryboard as geminiStoryboard } from "@/lib/studio/gemini";
+import { generateClonedStoryboard as claudeStoryboard } from "@/lib/studio/claude";
+import { getAiProvider } from "@/lib/studio/ai-provider";
 import { getActivePrompt, resolvePromptFramework } from "@/lib/studio/blueprints";
 
 export const maxDuration = 300;
@@ -18,11 +20,14 @@ export async function POST(req: NextRequest) {
     if (systemInstruction) {
       systemInstruction = await resolvePromptFramework(systemInstruction);
     }
+    const overrides = systemInstruction ? { systemInstruction } : undefined;
 
-    const scenes = await generateClonedStoryboard(
+    const provider = getAiProvider();
+    const generate = provider === "claude" ? claudeStoryboard : geminiStoryboard;
+    const scenes = await generate(
       analysis, script, productImage, productInfo, targetAudience, creatorImage,
       { motivator, emotionalTone, storylineType },
-      systemInstruction ? { systemInstruction } : undefined
+      overrides
     );
     return NextResponse.json({ scenes });
   } catch (e: unknown) {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { enhancePrompt } from "@/lib/studio/gemini";
+import { enhancePrompt as geminiEnhance } from "@/lib/studio/gemini";
+import { enhancePrompt as claudeEnhance } from "@/lib/studio/claude";
+import { getAiProvider } from "@/lib/studio/ai-provider";
 import { getActivePrompt, resolvePromptFramework } from "@/lib/studio/blueprints";
 import type { PromptType } from "@/lib/studio/default-prompts";
 
@@ -33,13 +35,16 @@ export async function POST(req: NextRequest) {
     if (systemInstruction) {
       systemInstruction = await resolvePromptFramework(systemInstruction);
     }
+    const overrides = systemInstruction ? { systemInstruction } : undefined;
 
-    const enhanced = await enhancePrompt(
+    const provider = getAiProvider();
+    const enhance = provider === "claude" ? claudeEnhance : geminiEnhance;
+    const enhanced = await enhance(
       projectContext || "", scene, promptType, productImage, creatorImage,
-      systemInstruction ? { systemInstruction } : undefined
+      overrides
     );
 
-    // Strip markdown code fences that Gemini sometimes wraps around JSON output
+    // Strip markdown code fences that AI sometimes wraps around output
     const cleaned = stripCodeFences(enhanced);
 
     return NextResponse.json({ enhancedPrompt: cleaned });
