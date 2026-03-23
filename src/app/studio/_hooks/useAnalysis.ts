@@ -69,68 +69,28 @@ export function useAnalysis() {
         );
         dispatch({ type: "SET_FRAMES", frames: thumbs });
 
-        // 2. Upload video to Vidtory to get a public URL for Gemini
-        //    We chunk-upload via FormData. If the file is >4MB, we read it
-        //    and upload in a way that avoids the serverless body limit.
-        let videoUrl: string;
-        const file = s.uploadedVideoFile;
-        if (!file) throw new Error("No video file available");
+        // 2. Extract hi-res frames client-side and analyze via Gemini
+        // (works on Vercel — no FFmpeg dependency)
+        const hiResFrames = await extractFramesHiRes(s.uploadedVideoUrl, 30);
 
-        // For files under 4MB, use the upload route directly
-        if (file.size < 4 * 1024 * 1024) {
-          const formData = new FormData();
-          formData.append("file", file);
-          const uploadRes = await fetch("/api/studio/upload", {
-            method: "POST",
-            body: formData,
-          });
-          if (!uploadRes.ok) throw new Error("Video upload failed");
-          const uploadData = await uploadRes.json();
-          videoUrl = uploadData.url;
-        } else {
-          // For larger files, create a temporary object URL and pass it
-          // to the server which will download it... but we can't do that
-          // with a blob URL. Instead, use the Gemini analyze directly
-          // by sending frames (client-extracted at higher quality).
-          const hiResFrames = await extractFramesHiRes(s.uploadedVideoUrl, 30);
-
-          const analyzeRes = await fetch("/api/studio/analyze", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              frames: hiResFrames,
-              fps: hiResFrames.length / Math.max(duration, 1),
-              duration,
-            }),
-          });
-
-          if (!analyzeRes.ok) {
-            const err = await analyzeRes.json();
-            throw new Error(err.error || "Analysis failed");
-          }
-          const analysis = await analyzeRes.json();
-          dispatch({ type: "SET_ANALYSIS", analysis });
-          dispatch({ type: "SET_ANALYZING", v: false });
-          return;
-        }
-
-        // 3. Send URL to server for Gemini File API analysis
-        const extractRes = await fetch("/api/studio/extract-frames", {
+        const analyzeRes = await fetch("/api/studio/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ videoUrl, analyze: true }),
+          body: JSON.stringify({
+            frames: hiResFrames,
+            fps: hiResFrames.length / Math.max(duration, 1),
+            duration,
+          }),
         });
-        if (!extractRes.ok) {
-          const err = await extractRes.json();
+
+        if (!analyzeRes.ok) {
+          const err = await analyzeRes.json();
           throw new Error(err.error || "Analysis failed");
         }
-        const data = await extractRes.json();
-        if (data.analysis) {
-          dispatch({ type: "SET_ANALYSIS", analysis: data.analysis });
-          dispatch({ type: "SET_ANALYZING", v: false });
-        } else if (data.analysisError) {
-          dispatch({ type: "SET_ANALYZE_ERROR", error: data.analysisError });
-        }
+        const analysis = await analyzeRes.json();
+        dispatch({ type: "SET_ANALYSIS", analysis });
+        dispatch({ type: "SET_ANALYZING", v: false });
+        return;
 
       } else if (s.sourceType === "db" && s.selectedAdVideoUrl) {
         // ── DB video: server handles everything via URL ──
