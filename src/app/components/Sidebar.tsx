@@ -30,10 +30,10 @@ export default function Sidebar() {
       {/* Brand */}
       <div className="flex items-center gap-2.5 px-4 pt-5 pb-6">
         <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-blue-500 flex items-center justify-center text-[12px] font-extrabold text-black tracking-tight shrink-0">
-          AG
+          🤌
         </span>
         <span className="text-[15px] font-bold text-sidebar-foreground">
-          Antigravity
+          Enhanced AI Factory
         </span>
       </div>
 

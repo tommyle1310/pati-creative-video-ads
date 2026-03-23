@@ -31,6 +31,7 @@ export const initialState: StudioState = {
   storyboardError: null,
   aspectRatio: "9:16",
   voice: "Kore",
+  videoModel: "vidtory",
   productVidtoryUrl: null,
   creatorVidtoryUrl: null,
   currentProjectId: null,

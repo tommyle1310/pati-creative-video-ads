@@ -14,6 +14,7 @@ import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
 import { analyzeVideoFromBytes } from "@/lib/studio/gemini";
+import { getActivePrompt } from "@/lib/studio/blueprints";
 
 // Allow up to 5 minutes for download + Gemini analysis
 export const maxDuration = 300;
@@ -128,7 +129,11 @@ export async function POST(req: NextRequest) {
     if (shouldAnalyze) {
       try {
         const videoBuffer = fs.readFileSync(videoPath);
-        analysis = await analyzeVideoFromBytes(videoBuffer, "video/mp4");
+        const systemInstruction = await getActivePrompt("analyze");
+        analysis = await analyzeVideoFromBytes(
+          videoBuffer, "video/mp4",
+          systemInstruction ? { systemInstruction } : undefined
+        );
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Analysis failed";
         console.error("[studio/extract-frames] analysis error:", msg);

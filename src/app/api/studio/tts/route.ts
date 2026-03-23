@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateTTS } from "@/lib/studio/gemini";
 
+export const maxDuration = 300;
+
 export async function POST(req: NextRequest) {
   try {
     const { text, guide, voice, globalInstruction } = await req.json();

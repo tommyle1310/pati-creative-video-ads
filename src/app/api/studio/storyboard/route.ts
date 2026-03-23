@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateClonedStoryboard } from "@/lib/studio/gemini";
+import { getActivePrompt, resolvePromptFramework } from "@/lib/studio/blueprints";
+
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,9 +13,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing analysis, script, or productImage" }, { status: 400 });
     }
 
+    // Fetch active storyboard blueprint, resolve {{PROMPT_FRAMEWORK}} placeholder
+    let systemInstruction = await getActivePrompt("storyboard");
+    if (systemInstruction) {
+      systemInstruction = await resolvePromptFramework(systemInstruction);
+    }
+
     const scenes = await generateClonedStoryboard(
       analysis, script, productImage, productInfo, targetAudience, creatorImage,
-      { motivator, emotionalTone, storylineType }
+      { motivator, emotionalTone, storylineType },
+      systemInstruction ? { systemInstruction } : undefined
     );
     return NextResponse.json({ scenes });
   } catch (e: unknown) {

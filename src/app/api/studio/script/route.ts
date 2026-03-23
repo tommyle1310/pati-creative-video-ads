@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateClonedScript } from "@/lib/studio/gemini";
+import { getActivePrompt } from "@/lib/studio/blueprints";
+
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,9 +13,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing analysis, bigIdea, or productImage" }, { status: 400 });
     }
 
+    const systemInstruction = await getActivePrompt("script");
+
     const scenes = await generateClonedScript(
       analysis, bigIdea, productImage, productInfo, targetAudience, creatorImage,
-      { motivator, emotionalTone, storylineType }
+      { motivator, emotionalTone, storylineType },
+      systemInstruction ? { systemInstruction } : undefined
     );
     return NextResponse.json({ scenes });
   } catch (e: unknown) {

@@ -1,10 +1,10 @@
 /**
- * GET /api/settings — returns current settings (masked key)
- * POST /api/settings — update settings { geminiApiKey }
- * DELETE /api/settings — reset to defaults (use .env key)
+ * GET /api/settings — returns current settings (masked keys)
+ * POST /api/settings — update settings { geminiApiKey, imageApiKey, imageProvider, videoApiKey, videoProvider }
+ * DELETE /api/settings — reset a specific key to defaults (body: { key: "gemini" | "image" | "video" })
  *
- * The custom key is stored in a simple JSON file at .tmp/settings.json
- * so it persists across server restarts but stays out of .env.
+ * The custom keys are stored in a simple JSON file at .tmp/settings.json
+ * so they persist across server restarts but stay out of .env.
  */
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
@@ -12,8 +12,15 @@ import path from "path";
 
 const SETTINGS_PATH = path.join(process.cwd(), ".tmp", "settings.json");
 
+type ImageProvider = "vidtory" | "kie";
+type VideoProvider = "vidtory" | "kie";
+
 interface Settings {
   geminiApiKey?: string;
+  imageApiKey?: string;
+  imageProvider?: ImageProvider;
+  videoApiKey?: string;
+  videoProvider?: VideoProvider;
 }
 
 function readSettings(): Settings {
@@ -37,39 +44,81 @@ function maskKey(key: string | undefined): string {
   return key.slice(0, 4) + "****" + key.slice(-4);
 }
 
+function readEnvKey(name: string): string | undefined {
+  const envPath = path.join(process.cwd(), ".env");
+  if (!fs.existsSync(envPath)) return undefined;
+  const content = fs.readFileSync(envPath, "utf-8");
+  const match = content.match(new RegExp(`^${name}\\s*=\\s*(.+)$`, "m"));
+  return match ? match[1].trim().replace(/^["']|["']$/g, "") : undefined;
+}
+
 export async function GET() {
   const settings = readSettings();
-  const envKey = process.env.GEMINI_API_KEY;
-  const customKey = settings.geminiApiKey;
-  const isUsingCustom = !!customKey;
+  const envGemini = process.env.GEMINI_API_KEY;
+  const envVidtory = process.env.VIDTORY_API_KEY;
+
+  const hasCustomGemini = !!settings.geminiApiKey;
+  const hasCustomImage = !!settings.imageApiKey;
+  const hasCustomVideo = !!settings.videoApiKey;
 
   return NextResponse.json({
-    geminiApiKey: maskKey(isUsingCustom ? customKey : envKey),
-    isUsingCustomKey: isUsingCustom,
-    hasEnvKey: !!envKey,
+    geminiApiKey: maskKey(hasCustomGemini ? settings.geminiApiKey : envGemini),
+    isUsingCustomGeminiKey: hasCustomGemini,
+    hasEnvGeminiKey: !!envGemini,
+
+    imageApiKey: maskKey(hasCustomImage ? settings.imageApiKey : envVidtory),
+    imageProvider: settings.imageProvider || "vidtory",
+    isUsingCustomImageKey: hasCustomImage,
+    hasEnvImageKey: !!envVidtory,
+
+    videoApiKey: maskKey(hasCustomVideo ? settings.videoApiKey : envVidtory),
+    videoProvider: settings.videoProvider || "vidtory",
+    isUsingCustomVideoKey: hasCustomVideo,
+    hasEnvVideoKey: !!envVidtory,
   });
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { geminiApiKey } = body;
+    const settings = readSettings();
 
-    if (!geminiApiKey || typeof geminiApiKey !== "string" || !geminiApiKey.trim()) {
-      return NextResponse.json({ error: "API key is required" }, { status: 400 });
+    // Gemini key
+    if (body.geminiApiKey && typeof body.geminiApiKey === "string" && body.geminiApiKey.trim()) {
+      settings.geminiApiKey = body.geminiApiKey.trim();
+      process.env.GEMINI_API_KEY = settings.geminiApiKey;
     }
 
-    const settings = readSettings();
-    settings.geminiApiKey = geminiApiKey.trim();
+    // Image key + provider
+    if (body.imageApiKey && typeof body.imageApiKey === "string" && body.imageApiKey.trim()) {
+      settings.imageApiKey = body.imageApiKey.trim();
+    }
+    if (body.imageProvider && ["vidtory", "kie"].includes(body.imageProvider)) {
+      settings.imageProvider = body.imageProvider;
+    }
+
+    // Video key + provider
+    if (body.videoApiKey && typeof body.videoApiKey === "string" && body.videoApiKey.trim()) {
+      settings.videoApiKey = body.videoApiKey.trim();
+    }
+    if (body.videoProvider && ["vidtory", "kie"].includes(body.videoProvider)) {
+      settings.videoProvider = body.videoProvider;
+    }
+
     writeSettings(settings);
 
-    // Update the runtime env so it takes effect immediately
-    process.env.GEMINI_API_KEY = geminiApiKey.trim();
+    const envVidtory = process.env.VIDTORY_API_KEY;
 
     return NextResponse.json({
       ok: true,
-      geminiApiKey: maskKey(geminiApiKey.trim()),
-      isUsingCustomKey: true,
+      geminiApiKey: maskKey(settings.geminiApiKey || process.env.GEMINI_API_KEY),
+      isUsingCustomGeminiKey: !!settings.geminiApiKey,
+      imageApiKey: maskKey(settings.imageApiKey || envVidtory),
+      imageProvider: settings.imageProvider || "vidtory",
+      isUsingCustomImageKey: !!settings.imageApiKey,
+      videoApiKey: maskKey(settings.videoApiKey || envVidtory),
+      videoProvider: settings.videoProvider || "vidtory",
+      isUsingCustomVideoKey: !!settings.videoApiKey,
     });
   } catch (err) {
     console.error("Settings save error:", err);
@@ -77,31 +126,40 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   try {
+    const body = await request.json().catch(() => ({ key: "all" }));
     const settings = readSettings();
-    delete settings.geminiApiKey;
+    const target = body.key || "all";
+
+    if (target === "gemini" || target === "all") {
+      delete settings.geminiApiKey;
+      const envKey = readEnvKey("GEMINI_API_KEY");
+      if (envKey) process.env.GEMINI_API_KEY = envKey;
+    }
+    if (target === "image" || target === "all") {
+      delete settings.imageApiKey;
+      delete settings.imageProvider;
+    }
+    if (target === "video" || target === "all") {
+      delete settings.videoApiKey;
+      delete settings.videoProvider;
+    }
+
     writeSettings(settings);
 
-    // Restore the original .env key
-    // Re-read from .env isn't possible at runtime, but the original is still in process.env
-    // unless it was overwritten. We need to clear our override.
-    // The cleanest approach: delete the override, restart picks up .env again.
-    // For immediate effect, we can't easily restore the original .env value at runtime.
-    // Instead, we'll re-read it from the .env file directly.
-    const envPath = path.join(process.cwd(), ".env");
-    if (fs.existsSync(envPath)) {
-      const envContent = fs.readFileSync(envPath, "utf-8");
-      const match = envContent.match(/^GEMINI_API_KEY\s*=\s*(.+)$/m);
-      if (match) {
-        process.env.GEMINI_API_KEY = match[1].trim().replace(/^["']|["']$/g, "");
-      }
-    }
+    const envVidtory = process.env.VIDTORY_API_KEY;
 
     return NextResponse.json({
       ok: true,
       geminiApiKey: maskKey(process.env.GEMINI_API_KEY),
-      isUsingCustomKey: false,
+      isUsingCustomGeminiKey: !!settings.geminiApiKey,
+      imageApiKey: maskKey(settings.imageApiKey || envVidtory),
+      imageProvider: settings.imageProvider || "vidtory",
+      isUsingCustomImageKey: !!settings.imageApiKey,
+      videoApiKey: maskKey(settings.videoApiKey || envVidtory),
+      videoProvider: settings.videoProvider || "vidtory",
+      isUsingCustomVideoKey: !!settings.videoApiKey,
     });
   } catch (err) {
     console.error("Settings reset error:", err);

@@ -6,6 +6,7 @@ import { useScriptGeneration } from "../_hooks/useScriptGeneration";
 import { MOTIVATORS, EMOTIONAL_TONES, STORYLINE_TYPES } from "../_constants";
 import { ScriptSkeleton } from "./SkeletonPanels";
 import { GeminiErrorBanner } from "./GeminiErrorBanner";
+import { BlueprintSelector } from "./BlueprintSelector";
 
 export function StepScript() {
   const { s, dispatch } = useStudio();
@@ -14,9 +15,12 @@ export function StepScript() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">
-          Cloned Script ({s.scriptScenes.length} scenes)
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold">
+            Cloned Script ({s.scriptScenes.length} scenes)
+          </h2>
+          <BlueprintSelector type="script" />
+        </div>
         <button
           onClick={handleGenerateScript}
           disabled={s.isGeneratingScript}

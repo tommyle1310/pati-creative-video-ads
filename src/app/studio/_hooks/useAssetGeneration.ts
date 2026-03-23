@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 import { useStudio } from "../_state/context";
-import { pollJob, pcmToWav } from "../_utils/helpers";
+import { pollJob, pollKieJob, pcmToWav } from "../_utils/helpers";
 
 export function useAssetGeneration() {
   const { s, dispatch } = useStudio();
@@ -157,7 +157,12 @@ export function useAssetGeneration() {
               "\nPhotorealistic, shot on Sony A7IV, 85mm lens, natural color grading.";
         }
 
-        const res = await fetch("/api/studio/generate-video", {
+        const useKie = s.videoModel === "kling-3.0";
+        const endpoint = useKie
+          ? "/api/studio/kie-generate-video"
+          : "/api/studio/generate-video";
+
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -165,6 +170,7 @@ export function useAssetGeneration() {
             aspectRatio: s.aspectRatio,
             startImageUrl: scene.selectedImageForVideo,
             duration: 5,
+            ...(useKie ? { mode: "std" } : {}),
           }),
         });
         if (!res.ok) throw new Error((await res.json()).error);
@@ -176,7 +182,9 @@ export function useAssetGeneration() {
           patch: { videoJobId: jobId },
         });
 
-        const videoUrl = await pollJob(jobId, 10000, 900000);
+        const videoUrl = useKie
+          ? await pollKieJob(jobId, 10000, 900000)
+          : await pollJob(jobId, 10000, 900000);
 
         dispatch({
           type: "UPDATE_SCENE",
@@ -201,7 +209,7 @@ export function useAssetGeneration() {
         });
       }
     },
-    [s.scenes, s.aspectRatio, dispatch]
+    [s.scenes, s.aspectRatio, s.videoModel, dispatch]
   );
 
   const handleGenerateAudio = useCallback(

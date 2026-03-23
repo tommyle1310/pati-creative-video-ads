@@ -24,7 +24,12 @@ export function useScriptGeneration() {
           storylineType: s.storylineType,
         }),
       });
-      if (!res.ok) throw new Error((await res.json()).error);
+      if (!res.ok) {
+        const text = await res.text();
+        let msg = `Script generation failed (${res.status})`;
+        try { msg = JSON.parse(text).error || msg; } catch { /* non-JSON response */ }
+        throw new Error(msg);
+      }
       const { scenes: scriptScenes } = await res.json();
       dispatch({ type: "SET_SCRIPT_SCENES", scriptScenes });
     } catch (err) {

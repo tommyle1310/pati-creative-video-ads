@@ -6,6 +6,7 @@ import { useStudio } from "../_state/context";
 import { useAnalysis } from "../_hooks/useAnalysis";
 import { AnalysisSkeleton } from "./SkeletonPanels";
 import { GeminiErrorBanner } from "./GeminiErrorBanner";
+import { BlueprintSelector } from "./BlueprintSelector";
 
 const ANALYSIS_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
 
@@ -59,9 +60,12 @@ export function StepAnalyze() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">
-          Frame Extraction & Analysis
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold">
+            Frame Extraction & Analysis
+          </h2>
+          <BlueprintSelector type="analyze" />
+        </div>
         <button
           onClick={extractFrames}
           disabled={isBusy}

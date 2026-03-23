@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import {
   Image as ImageIcon,
   Globe,
@@ -22,7 +22,11 @@ export function StepProduct() {
     handleRemoveUrl,
     handleUrlChange,
     handleScrapeLandingPages,
+    loadSavedProfileUrls,
   } = useLandingPageScrape();
+
+  // Auto-populate URLs from saved product profiles on mount
+  useEffect(() => { loadSavedProfileUrls(); }, []);
 
   const handleImageUpload = useCallback(
     async (

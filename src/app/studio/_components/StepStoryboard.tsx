@@ -6,6 +6,7 @@ import { useStoryboardGeneration } from "../_hooks/useStoryboardGeneration";
 import { useAssetGeneration } from "../_hooks/useAssetGeneration";
 import { StoryboardSkeleton } from "./SkeletonPanels";
 import { GeminiErrorBanner } from "./GeminiErrorBanner";
+import { BlueprintSelector } from "./BlueprintSelector";
 
 export function StepStoryboard() {
   const { s, dispatch } = useStudio();
@@ -15,9 +16,13 @@ export function StepStoryboard() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">
-          Storyboard ({s.scenes.length} scenes)
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold">
+            Storyboard ({s.scenes.length} scenes)
+          </h2>
+          <BlueprintSelector type="storyboard" />
+          <BlueprintSelector type="prompt_framework" label="Framework" />
+        </div>
         <button
           onClick={handleGenerateStoryboard}
           disabled={s.isGeneratingStoryboard}

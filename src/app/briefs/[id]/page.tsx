@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, Pencil, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -47,6 +47,7 @@ interface BriefData {
   basedOnAdIds: string[];
   briefJson: BriefJson;
   userContext: string | null;
+  notes: string | null;
   createdAt: string;
 }
 
@@ -57,6 +58,9 @@ export default function BriefDetailPage() {
 
   const [brief, setBrief] = useState<BriefData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesText, setNotesText] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -65,6 +69,7 @@ export default function BriefDetailPage() {
         if (!res.ok) { router.push("/briefs"); return; }
         const data = await res.json();
         setBrief(data.brief);
+        setNotesText(data.brief.notes || "");
       } catch { router.push("/briefs"); }
       setLoading(false);
     })();
@@ -101,6 +106,21 @@ export default function BriefDetailPage() {
     if (b.productionNotes) md += `## Production Notes\n${b.productionNotes}\n`;
 
     navigator.clipboard.writeText(md);
+  };
+
+  const saveNotes = async () => {
+    if (!brief) return;
+    setSavingNotes(true);
+    try {
+      await fetch(`/api/briefs/${brief.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: notesText || null }),
+      });
+      setBrief({ ...brief, notes: notesText || null });
+      setEditingNotes(false);
+    } catch { /* ignore */ }
+    setSavingNotes(false);
   };
 
   if (loading) {
@@ -325,6 +345,40 @@ export default function BriefDetailPage() {
           </Card>
         </section>
       )}
+
+      {/* Notes */}
+      <section className="mb-7">
+        <div className="flex items-center justify-between pb-2 mb-3 border-b border-border">
+          <h2 className="text-base font-semibold text-foreground">Notes</h2>
+          {editingNotes ? (
+            <Button variant="outline" size="sm" onClick={saveNotes} disabled={savingNotes} className="flex items-center gap-1.5">
+              <Save className="h-3.5 w-3.5" />
+              {savingNotes ? "Saving..." : "Save"}
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" onClick={() => setEditingNotes(true)} className="flex items-center gap-1.5 text-muted-foreground">
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </Button>
+          )}
+        </div>
+        {editingNotes ? (
+          <textarea
+            value={notesText}
+            onChange={(e) => setNotesText(e.target.value)}
+            placeholder="Add notes about this brief..."
+            rows={4}
+            className="w-full px-3 py-2.5 bg-white/5 border border-border rounded-md text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary resize-y font-[inherit]"
+            autoFocus
+          />
+        ) : brief.notes ? (
+          <Card className="p-4">
+            <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{brief.notes}</p>
+          </Card>
+        ) : (
+          <p className="text-sm text-muted-foreground">No notes yet. Click Edit to add notes.</p>
+        )}
+      </section>
     </div>
   );
 }

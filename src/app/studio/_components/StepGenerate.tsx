@@ -22,6 +22,7 @@ import { PreviewModal } from "./PreviewModal";
 import { SaveAssetButton } from "./SaveAssetButton";
 import { AssetPicker } from "./AssetPicker";
 import { GeminiErrorBanner } from "./GeminiErrorBanner";
+import { BlueprintSelector } from "./BlueprintSelector";
 
 export function StepGenerate() {
   const { s, dispatch } = useStudio();
@@ -59,7 +60,10 @@ export function StepGenerate() {
     <div className="space-y-6">
       {/* Header + controls */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-lg font-semibold">Generate Assets</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold">Generate Assets</h2>
+          <BlueprintSelector type="enhance" label="Enhance Prompt" />
+        </div>
         <div className="flex gap-3 flex-wrap items-end">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
@@ -79,6 +83,25 @@ export function StepGenerate() {
               <option value="9:16">9:16 (Portrait)</option>
               <option value="16:9">16:9 (Landscape)</option>
               <option value="1:1">1:1 (Square)</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+              Video Model
+            </label>
+            <select
+              value={s.videoModel}
+              onChange={(e) =>
+                dispatch({
+                  type: "SET_FIELD",
+                  field: "videoModel",
+                  value: e.target.value,
+                })
+              }
+              className="bg-background border border-border rounded px-2 py-1.5 text-sm"
+            >
+              <option value="vidtory">Vidtory</option>
+              <option value="kling-3.0">Kling 3.0 (KIE)</option>
             </select>
           </div>
           <div className="flex flex-col gap-1">
@@ -443,6 +466,17 @@ export function StepGenerate() {
                       <div className="flex items-center justify-between gap-1">
                         <span className="text-xs font-semibold flex items-center gap-1.5 text-emerald-400">
                           <Video size={14} /> Videos
+                          <span
+                            className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
+                              s.videoModel === "kling-3.0"
+                                ? "bg-orange-500/20 text-orange-400"
+                                : "bg-cyan-500/20 text-cyan-400"
+                            }`}
+                          >
+                            {s.videoModel === "kling-3.0"
+                              ? "Kling 3.0"
+                              : "Vidtory"}
+                          </span>
                         </span>
                         <div className="flex gap-1">
                           <button

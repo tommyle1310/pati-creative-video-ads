@@ -342,9 +342,14 @@ const ANALYSIS_SCHEMA = {
  * Uploads the video bytes to Gemini, waits for processing, then analyzes.
  * This avoids Vercel's 4.5MB payload limit entirely.
  */
+export interface PromptOverrides {
+  systemInstruction?: string;
+}
+
 export async function analyzeVideoFromBytes(
   videoBuffer: Buffer,
-  mimeType: string = "video/mp4"
+  mimeType: string = "video/mp4",
+  overrides?: PromptOverrides
 ): Promise<VideoAnalysis> {
   const ai = getClient();
 
@@ -384,7 +389,7 @@ IMPORTANT: This is a video AD — scenes change rapidly (every 1-4 seconds). Cut
       model,
       contents: { parts },
       config: {
-        systemInstruction: VIDEO_ANALYSIS_INSTRUCTION,
+        systemInstruction: overrides?.systemInstruction || VIDEO_ANALYSIS_INSTRUCTION,
         responseMimeType: "application/json",
         responseSchema: ANALYSIS_SCHEMA,
       },
@@ -402,7 +407,8 @@ export async function analyzeVideoFrames(
   frames: string[],
   fps: number,
   duration: number,
-  audioBase64?: string
+  audioBase64?: string,
+  overrides?: PromptOverrides
 ): Promise<VideoAnalysis> {
   const ai = getClient();
 
@@ -451,7 +457,7 @@ IMPORTANT: This is a video AD — scenes change rapidly (every 1-4 seconds). Cut
       model,
       contents: { parts },
       config: {
-        systemInstruction: VIDEO_ANALYSIS_INSTRUCTION,
+        systemInstruction: overrides?.systemInstruction || VIDEO_ANALYSIS_INSTRUCTION,
         responseMimeType: "application/json",
         responseSchema: ANALYSIS_SCHEMA,
       },
@@ -479,7 +485,8 @@ export async function generateClonedScript(
   productInfo?: string,
   targetAudience?: string,
   creatorImage?: string,
-  strategy?: CreativeStrategy
+  strategy?: CreativeStrategy,
+  overrides?: PromptOverrides
 ): Promise<ScriptScene[]> {
   const ai = getClient();
 
@@ -563,7 +570,7 @@ Write a complete ${analysis.sceneBreakdown.length}-scene script. Match the origi
       model,
       contents: { parts },
       config: {
-        systemInstruction: CLONED_SCRIPT_INSTRUCTION,
+        systemInstruction: overrides?.systemInstruction || CLONED_SCRIPT_INSTRUCTION,
         responseMimeType: "application/json",
         responseSchema: {
           type: "OBJECT",
@@ -597,7 +604,8 @@ export async function generateClonedStoryboard(
   productInfo?: string,
   targetAudience?: string,
   creatorImage?: string,
-  strategy?: CreativeStrategy
+  strategy?: CreativeStrategy,
+  overrides?: PromptOverrides
 ): Promise<StoryboardScene[]> {
   const ai = getClient();
 
@@ -647,7 +655,7 @@ export async function generateClonedStoryboard(
       model,
       contents: { parts },
       config: {
-        systemInstruction: CLONED_STORYBOARD_INSTRUCTION,
+        systemInstruction: overrides?.systemInstruction || CLONED_STORYBOARD_INSTRUCTION,
         maxOutputTokens: 65536,
         responseMimeType: "application/json",
         responseSchema: {
@@ -769,7 +777,8 @@ export async function enhancePrompt(
   scene: StoryboardScene,
   promptType: "image" | "video",
   productImage?: string,
-  creatorImage?: string
+  creatorImage?: string,
+  overrides?: PromptOverrides
 ): Promise<string> {
   const ai = getClient();
 
@@ -803,7 +812,7 @@ export async function enhancePrompt(
       model,
       contents: { parts },
       config: {
-        systemInstruction: ENHANCE_PROMPT_INSTRUCTION,
+        systemInstruction: overrides?.systemInstruction || ENHANCE_PROMPT_INSTRUCTION,
         temperature: 0.7,
       },
     });

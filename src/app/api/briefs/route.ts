@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { adIds, targetProduct, targetMarket, additionalContext } = body;
+    const { adIds, targetProduct, targetMarket, additionalContext, notes } = body;
 
     if (!adIds?.length || !targetProduct || !targetMarket) {
       return NextResponse.json({ error: "adIds, targetProduct, and targetMarket are required" }, { status: 400 });
@@ -86,6 +86,24 @@ export async function POST(request: NextRequest) {
     if (ads.length === 0) {
       return NextResponse.json({ error: "No ads found for the given IDs" }, { status: 404 });
     }
+
+    // Load product profile for additional context
+    let productProfileContext = "";
+    try {
+      const profile = await prisma.productProfile.findUnique({
+        where: { name: targetProduct },
+      });
+      if (profile) {
+        const parts = [];
+        if (profile.landingPageUrls?.length) parts.push(`Landing Pages: ${profile.landingPageUrls.join(", ")}`);
+        if (profile.bigIdea) parts.push(`Big Idea: ${profile.bigIdea}`);
+        if (profile.productInfo) parts.push(`Product Info: ${profile.productInfo}`);
+        if (profile.targetAudience) parts.push(`Target Audience: ${profile.targetAudience}`);
+        if (parts.length) {
+          productProfileContext = `\n\nSAVED PRODUCT DATA FOR ${targetProduct}:\n${parts.join("\n")}`;
+        }
+      }
+    } catch { /* profile lookup is optional */ }
 
     // Build the user prompt
     const adSummaries = ads.map((ad: {
@@ -113,6 +131,7 @@ Based on these ${ads.length} winning competitor ad(s):
 
 ${adSummaries}
 
+${productProfileContext}
 ${additionalContext ? `Additional context from user: ${additionalContext}` : ""}
 
 Return ONLY valid JSON matching the specified structure. No markdown, no preamble.`;
@@ -164,6 +183,7 @@ Return ONLY valid JSON matching the specified structure. No markdown, no preambl
         basedOnAdIds: adIds,
         briefJson,
         userContext: additionalContext || null,
+        notes: notes || null,
       },
     });
 

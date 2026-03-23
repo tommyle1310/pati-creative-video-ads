@@ -61,11 +61,45 @@ export function useLandingPageScrape() {
           field: "targetAudience",
           value: data.targetAudience,
         });
+
+      // Save product profile to DB for reuse across Brief + Studio
+      try {
+        const profileName = s.selectedAdBrand || "Custom";
+        await fetch("/api/product-profiles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: profileName,
+            landingPageUrls: urls,
+            bigIdea: data.bigIdea || null,
+            productInfo: data.productInfo || null,
+            targetAudience: data.targetAudience || null,
+          }),
+        });
+      } catch { /* saving profile is best-effort */ }
     } catch (err) {
       alert(err instanceof Error ? err.message : "Scrape failed");
     } finally {
       dispatch({ type: "SET_FIELD", field: "isScrapingUrls", value: false });
     }
+  }, [s.landingPageUrls, s.selectedAdBrand, dispatch]);
+
+  const loadSavedProfileUrls = useCallback(async () => {
+    try {
+      const res = await fetch("/api/product-profiles");
+      const data = await res.json();
+      const profiles = data.profiles || [];
+      if (!profiles.length) return;
+      // Use the most recently updated profile's URLs if current URLs are empty
+      const hasUrls = s.landingPageUrls.some((u) => u.trim());
+      if (!hasUrls && profiles[0]?.landingPageUrls?.length) {
+        dispatch({
+          type: "SET_FIELD",
+          field: "landingPageUrls",
+          value: profiles[0].landingPageUrls,
+        });
+      }
+    } catch { /* ignore */ }
   }, [s.landingPageUrls, dispatch]);
 
   return {
@@ -73,5 +107,6 @@ export function useLandingPageScrape() {
     handleRemoveUrl,
     handleUrlChange,
     handleScrapeLandingPages,
+    loadSavedProfileUrls,
   };
 }

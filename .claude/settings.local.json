@@ -42,7 +42,14 @@
       "Bash(for route:*)",
       "Bash(do echo:*)",
       "Read(//d/jobs/pati/creative-project/src/app/api/studio/$route/**)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(ls -la /d/jobs/pati/creative-project/.env*)",
+      "Bash(curl -s http://localhost:3000/api/studio/blueprints)",
+      "Bash(curl -s http://localhost:3000/api/studio/blueprints?type=analyze)",
+      "Bash(curl -s -X POST http://localhost:3000/api/studio/blueprints -H \"Content-Type: application/json\" -d '{\"\"title\"\":\"\"Test\"\",\"\"content\"\":\"\"test content\"\",\"\"type\"\":\"\"analyze\"\"}')",
+      "Bash(node -e \":*)",
+      "Bash(grep -r \"kling\\\\|KIE\\\\|klingai\\\\|KlingVideo\" /d/jobs/pati/creative-project/src --include=*.ts --include=*.tsx)",
+      "WebFetch(domain:docs.kie.ai)"
     ]
   }
 }

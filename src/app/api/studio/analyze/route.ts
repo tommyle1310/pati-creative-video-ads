@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeVideoFrames } from "@/lib/studio/gemini";
+import { getActivePrompt } from "@/lib/studio/blueprints";
+
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,7 +20,13 @@ export async function POST(req: NextRequest) {
           frames[Math.floor((i / maxFrames) * frames.length)]
         );
 
-    const analysis = await analyzeVideoFrames(limitedFrames, fps, duration, audio || undefined);
+    // Fetch active blueprint (falls back to hardcoded if DB fails or empty)
+    const systemInstruction = await getActivePrompt("analyze");
+
+    const analysis = await analyzeVideoFrames(
+      limitedFrames, fps, duration, audio || undefined,
+      systemInstruction ? { systemInstruction } : undefined
+    );
     return NextResponse.json(analysis);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Analysis failed";

@@ -8,6 +8,8 @@ export type { VideoAnalysis, StoryboardScene, ScriptScene };
 
 // ── State ────────────────────────────────────────────────────
 
+export type VideoModel = "vidtory" | "kling-3.0";
+
 export interface StudioState {
   step: number;
   maxStepReached: number;
@@ -46,6 +48,7 @@ export interface StudioState {
   // Step 6
   aspectRatio: "9:16" | "16:9" | "1:1";
   voice: string;
+  videoModel: VideoModel;
   // uploaded vidtory URLs (cached so we don't re-upload)
   productVidtoryUrl: string | null;
   creatorVidtoryUrl: string | null;

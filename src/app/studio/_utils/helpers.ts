@@ -28,6 +28,25 @@ export async function pollJob(
   throw new Error("Timed out");
 }
 
+export async function pollKieJob(
+  jobId: string,
+  intervalMs: number,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<string> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (signal?.aborted) throw new Error("Cancelled");
+    const res = await fetch(`/api/studio/kie-job-status?jobId=${jobId}`);
+    const data: JobStatusResponse = await res.json();
+    if (data.status === "COMPLETED" && data.url) return data.url;
+    if (data.status === "FAILED")
+      throw new Error(data.error || "KIE job failed");
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error("KIE job timed out");
+}
+
 export function pcmToWav(audioBase64: string): string {
   const pcmBytes = Uint8Array.from(atob(audioBase64), (c) =>
     c.charCodeAt(0)
