@@ -14,6 +14,9 @@ import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
 import { analyzeVideoFromBytes } from "@/lib/studio/gemini";
+import { analyzeVideoFrames as claudeAnalyze } from "@/lib/studio/claude";
+import { transcribeAudioFile } from "@/lib/studio/transcribe";
+import { getAiProvider } from "@/lib/studio/ai-provider";
 import { getActivePrompt } from "@/lib/studio/blueprints";
 
 // Allow up to 5 minutes for download + Gemini analysis
@@ -123,17 +126,61 @@ export async function POST(req: NextRequest) {
 
     const fps = Math.max(thumbnails.length, 1) / Math.max(duration, 1);
 
-    // Analyze video using Gemini File API (upload video directly to Gemini)
+    // Analyze video
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let analysis: any = undefined;
     if (shouldAnalyze) {
       try {
-        const videoBuffer = fs.readFileSync(videoPath);
         const systemInstruction = await getActivePrompt("analyze");
-        analysis = await analyzeVideoFromBytes(
-          videoBuffer, "video/mp4",
-          systemInstruction ? { systemInstruction } : undefined
-        );
+        const overrides = systemInstruction ? { systemInstruction } : undefined;
+        const provider = getAiProvider();
+
+        if (provider === "claude") {
+          // Claude path: extract hi-res frames + audio with ffmpeg, transcribe, then analyze
+          // 1. Extract hi-res frames (480px wide) for Claude vision
+          const hiResDir = path.join(jobDir, "hires");
+          fs.mkdirSync(hiResDir, { recursive: true });
+          const hiResPattern = path.join(hiResDir, "frame_%04d.jpg");
+          await run("ffmpeg", [
+            "-i", videoPath,
+            "-vf", `fps=2,scale=480:-1`,
+            "-q:v", "4",
+            "-y", hiResPattern,
+          ], 120000);
+          const hiResFiles = fs.readdirSync(hiResDir)
+            .filter((f) => f.startsWith("frame_") && f.endsWith(".jpg"))
+            .sort()
+            .slice(0, 30); // max 30 frames (Claude will sample down to 20)
+          const hiResFrames = hiResFiles.map((f) => {
+            const buf = fs.readFileSync(path.join(hiResDir, f));
+            return buf.toString("base64");
+          });
+          const hiResFps = Math.max(hiResFrames.length, 1) / Math.max(duration, 1);
+
+          // 2. Extract audio and transcribe with Groq Whisper
+          let transcript: string | undefined;
+          try {
+            const audioPath = path.join(jobDir, "audio.wav");
+            await run("ffmpeg", [
+              "-i", videoPath,
+              "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
+              "-t", "90", // cap at 90s
+              "-y", audioPath,
+            ], 30000);
+            if (fs.existsSync(audioPath) && fs.statSync(audioPath).size > 1000) {
+              transcript = await transcribeAudioFile(audioPath);
+            }
+          } catch (e) {
+            console.warn("[studio/extract-frames] Audio extraction/transcription failed:", e);
+          }
+
+          // 3. Analyze with Claude
+          analysis = await claudeAnalyze(hiResFrames, hiResFps, duration, undefined, overrides, transcript);
+        } else {
+          // Gemini path: upload entire video to Gemini File API
+          const videoBuffer = fs.readFileSync(videoPath);
+          analysis = await analyzeVideoFromBytes(videoBuffer, "video/mp4", overrides);
+        }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Analysis failed";
         console.error("[studio/extract-frames] analysis error:", msg);

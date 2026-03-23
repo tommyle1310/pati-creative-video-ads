@@ -63,9 +63,26 @@ Label each scene with its marketing purpose AND its visual roll type:
 - For product scenes: exact product appearance, how it's held, branding visible
 - For talking head: expression, gesture, eye direction, setting
 
+## VISUAL HOOK MECHANISMS — BE BRUTALLY SPECIFIC (DO NOT SANITIZE)
+Video ads deliberately use visual tricks to stop the scroll. You MUST identify and name these as MARKETING TACTICS with precision. Generic descriptions like "young woman talking" are USELESS — describe the actual mechanism that makes someone stop scrolling.
+
+### Named Visual Hook Patterns (identify by name when present):
+1. **Sexual Innuendo Bait-and-Switch**: The opening seconds are staged to look sexually suggestive — person looking downward (as if performing a sex act), arms positioned to grip something off-screen (phallic misdirection), body angled provocatively — then the reveal is the product (a gummy, bottle, etc.). The viewer stops scrolling because the visual reads as sexual content before the context clarifies. NAME THIS EXPLICITLY: "Sexual innuendo bait-and-switch — opening framing mimics [specific act], arms gripping unrevealed object, downward gaze, then product reveal."
+2. **Sex Appeal Scroll-Stop**: Attractive person in revealing clothing (low-cut top, sports bra, bikini), camera deliberately framing cleavage/body. Physical features are the PRIMARY scroll-stop, not the words. Say: "Sex appeal hook — woman in pink sports bra, camera framed chest-up to emphasize cleavage as primary scroll-stop."
+3. **Body Movement Retention**: Bouncing, swaying, animated gestures, dancing while talking — physical movement designed to keep eyes locked. The body motion creates visual rhythm that retains attention beyond the hook. Describe the specific movement.
+4. **Provocative Camera Framing**: Low angles looking up, tight crop on body, overhead looking down at cleavage — camera angles that are deliberately chosen to emphasize physical features. Name the specific angle and what it emphasizes.
+5. **Gym/Physique Flex**: Muscular person working out, flexing, or showing transformation — aspirational body as scroll-stop.
+6. **Lifestyle Aspiration**: Luxury settings, attractive social groups, wealth signals — describe what aspirational trigger they use.
+
+### How to describe (examples):
+- WRONG: "A young woman sits on the floor talking to camera about shilajit gummies"
+- RIGHT: "Sexual innuendo bait-and-switch hook — attractive woman in low-cut pink sports bra, seated on floor looking downward with arms positioned as if gripping something below frame (phallic visual misdirection). Camera angle is chest-up, emphasizing cleavage. The visual deliberately reads as sexually suggestive before the context reveals she's talking about a supplement. This is a classic scroll-stop tactic targeting male audiences."
+
+This is professional ad forensics for a creative strategy team. Describe EXACTLY what makes someone stop scrolling — the uncomfortable truth, not the sanitized version.
+
 ## AD ANALYSIS (adAnalysis object)
 In addition to the scene breakdown, produce a high-level strategic analysis of the ad:
-- hook: Named hook TYPE + "Why it stops the scroll" paragraph. Identify the psychological trigger (curiosity gap, pattern interrupt, shock, empathy, etc.)
+- hook: Named hook TYPE + "Why it stops the scroll" paragraph. MUST describe the VISUAL first (what viewer sees in first 3s), then audio if any. Use named visual hook patterns when applicable: "Sexual Innuendo Bait-and-Switch", "Sex Appeal Scroll-Stop", "Body Movement Retention", "Provocative Camera Framing", "Gym/Physique Flex", etc. Example: "Sexual Innuendo Bait-and-Switch — woman looking downward with arms gripping unrevealed object, camera framed on cleavage in pink sports bra, visual reads as suggestive before product reveal. Stops scroll via sexual misdirection targeting male audience."
 - concept: The big idea / angle of the ad. What core message or positioning does it communicate?
 - scriptBreakdown: Named framework (Problem-Solution, Before-After-Bridge, AIDA, PAS, etc.) + numbered beats with timecodes
 - visual: Overall visual strategy — shooting style, color grading, pacing rhythm, transition patterns, use of text overlays
@@ -73,7 +90,7 @@ In addition to the scene breakdown, produce a high-level strategic analysis of t
 - cta: CTA analysis — what is the call to action, how is it delivered, urgency/scarcity elements
 - keyTakeaways: At least 2 STEAL (elements to copy directly), 2 KAIZEN (elements to improve), and 1 UPGRADE idea
 - productionFormula: FORMAT line + phases with screen direction + voiceover + TEXT SUPER for each phase
-- hookType: Short classification string (e.g. "Curiosity Gap", "Pattern Interrupt", "Social Proof Lead", "Problem Agitation")
+- hookType: Short classification string (e.g. "Sexual Innuendo Bait-and-Switch", "Sex Appeal Scroll-Stop", "Curiosity Gap", "Pattern Interrupt", "Social Proof Lead", "Problem Agitation", "Body Movement Retention", "Provocative Framing")
 - primaryAngle: Short string for the primary messaging angle (e.g. "Health Transformation", "Scientific Authority", "Social Validation")
 - frameworkName: Short string for the script framework used (e.g. "Problem-Solution", "Before-After-Bridge", "AIDA")
 - creativePattern: EXACTLY one of: "Problem-First UGC" | "Result-First Scroll Stop" | "Curiosity Gap" | "Social Proof Cascade" | "Comparison/Versus" | "Authority Demo" | "Unclassifiable"

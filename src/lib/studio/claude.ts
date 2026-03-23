@@ -247,7 +247,8 @@ export async function analyzeVideoFrames(
   fps: number,
   duration: number,
   audioBase64?: string,
-  overrides?: PromptOverrides
+  overrides?: PromptOverrides,
+  transcript?: string
 ): Promise<VideoAnalysis> {
   // Claude supports up to 20 images per message — sample down from up to 60
   const maxFrames = 20;
@@ -263,9 +264,7 @@ export async function analyzeVideoFrames(
     return (frameIdx / Math.max(fps, 0.5)).toFixed(1);
   });
 
-  if (audioBase64) {
-    console.warn("[Claude] Audio transcription not supported — analyzing frames only. For audio-based transcription, use Gemini.");
-  }
+  const hasTranscript = !!transcript && transcript !== "No speech detected.";
 
   const systemPrompt = `${overrides?.systemInstruction || VIDEO_ANALYSIS_INSTRUCTION}
 
@@ -276,13 +275,16 @@ The JSON must be an object with these keys:
 - "sceneBreakdown": array of objects, each with: "scene_id" (integer), "type" (string), "time" (string), "visual" (string), "speech" (string)
 - "adAnalysis": object with keys: "hook", "concept", "scriptBreakdown", "visual", "psychology", "cta", "keyTakeaways", "productionFormula", "hookType", "primaryAngle", "frameworkName", "creativePattern"`;
 
+  const audioSection = hasTranscript
+    ? `\nAUDIO TRANSCRIPT (from the video's voiceover/dialogue):\n"""\n${transcript}\n"""\nUse this transcript to assign the EXACT spoken words to each scene based on timing. Match speech segments to their corresponding visual scenes.`
+    : `\nNo audio transcript available — extract speech from visible text overlays only.`;
+
   const content: ContentBlock[] = [
     {
       type: "text",
       text: `Analyze these ${sampled.length} frames from a ${duration.toFixed(1)}-second video, captured at ${fps.toFixed(1)} FPS.
 Frame timestamps: ${frameTimestamps.map((t, i) => `Frame ${i + 1} = ${t}s`).join(", ")}.
-
-No audio track available — extract speech from visible text overlays only.
+${audioSection}
 
 IMPORTANT: This is a video AD — scenes change rapidly (every 1-4 seconds). Cut scenes at every visual change. The full video is ${duration.toFixed(1)} seconds — make sure you cover ALL of it from 0s to ${duration.toFixed(1)}s. A ${Math.round(duration)}-second ad should have ${Math.max(8, Math.round(duration / 3))}-${Math.round(duration / 1.5)}+ scenes.`,
     },

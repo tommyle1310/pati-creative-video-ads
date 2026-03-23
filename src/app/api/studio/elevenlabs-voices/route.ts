@@ -45,6 +45,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "name and text are required" }, { status: 400 });
     }
 
+    // ElevenLabs requires text to be at least 100 characters
+    let sampleText = text;
+    if (sampleText.length < 100) {
+      sampleText = sampleText.padEnd(100, ". This voice is designed for high-quality narration and advertisements");
+    }
+
     // Use voice design (text-to-voice) to create a voice from a prompt
     const res = await fetch(`${BASE}/text-to-voice/create-previews`, {
       method: "POST",
@@ -54,7 +60,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         voice_description: description || name,
-        text,
+        text: sampleText,
       }),
     });
 

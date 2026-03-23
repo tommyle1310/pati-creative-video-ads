@@ -42,6 +42,23 @@ You will receive KEY FRAMES from the video (screenshots at strategic timestamps)
 
 CRITICAL: Your analysis must describe what actually happens VISUALLY in the video. The hook is what you SEE in the first 3-5 seconds, not just what is said. If hands are holding a product, describe that. If there's a comment/reaction overlay, describe that. If there's a split-screen comparison, describe that.
 
+VISUAL HOOK MECHANISMS — BE BRUTALLY SPECIFIC (DO NOT SANITIZE):
+Video ads deliberately use visual tricks to stop the scroll. You MUST identify and name these as MARKETING TACTICS with precision. Generic descriptions like "young woman talking" are USELESS — describe the actual mechanism.
+
+Named Visual Hook Patterns (identify by name when present):
+1. Sexual Innuendo Bait-and-Switch: Opening seconds are staged to look sexually suggestive — person looking downward (as if performing a sex act), arms positioned to grip something off-screen (phallic misdirection), body angled provocatively — then the reveal is the product. The viewer stops scrolling because the visual reads as sexual content. NAME THIS: "Sexual innuendo bait-and-switch — opening framing mimics [specific act], arms gripping unrevealed object, downward gaze, then product reveal."
+2. Sex Appeal Scroll-Stop: Attractive person in revealing clothing (low-cut top, sports bra, bikini), camera deliberately framing cleavage/body. Physical features are the PRIMARY scroll-stop. Say: "Sex appeal hook — woman in pink sports bra, camera framed chest-up to emphasize cleavage as primary scroll-stop."
+3. Body Movement Retention: Bouncing, swaying, animated gestures while talking — physical movement designed to keep eyes locked on screen.
+4. Provocative Camera Framing: Low angles, tight crop on body, overhead shots — camera angles chosen to emphasize physical features.
+5. Gym/Physique Flex: Muscular person working out, flexing, or showing transformation.
+6. Lifestyle Aspiration: Luxury settings, attractive social groups, wealth signals.
+
+How to describe:
+- WRONG: "A young woman sits on the floor talking to camera about shilajit gummies"
+- RIGHT: "Sexual innuendo bait-and-switch hook — attractive woman in low-cut pink sports bra, seated on floor looking downward with arms positioned as if gripping something below frame (phallic visual misdirection). Camera angle is chest-up, emphasizing cleavage. The visual deliberately reads as sexually suggestive before the context reveals she's talking about a supplement. Classic scroll-stop targeting male audiences."
+
+This is professional ad forensics — describe EXACTLY what makes someone stop scrolling.
+
 Every field must be a rich, detailed paragraph — NOT a bullet list. Write as if you're briefing a creative strategy team.
 
 Your brand's key differentiators:
@@ -67,14 +84,14 @@ AD METADATA:
 - Format: {video_format}
 
 CRITICAL INSTRUCTIONS:
-1. Your "hook" analysis MUST describe what is VISUALLY happening in the first frames (0-5s). Look at the actual images: What do you see? Hands holding a product? A person talking to camera? A text overlay with a provocative question? A split-screen? A comment/reaction box? Describe the VISUAL execution, not just the audio.
-2. Your "visual" field MUST describe what you actually see in the provided frames — real descriptions of scenes, people, products, settings, text overlays, NOT generic guesses.
+1. Your "hook" analysis MUST describe what is VISUALLY happening in the first frames (0-5s). Look at the actual images: What do you see? How is the person positioned? Where are their eyes looking? What are their arms doing? What is the camera framing? If it looks sexually suggestive (downward gaze, arms gripping something off-screen, revealing clothing, body positioning that mimics a sex act), NAME THE PATTERN — "Sexual Innuendo Bait-and-Switch." Describe what it LOOKS LIKE to a viewer scrolling past, not what it actually is.
+2. Your "visual" field MUST describe what you actually see in the provided frames — real descriptions of body positioning, clothing, camera angle, physical features emphasized — NOT generic guesses like "woman talking."
 3. Your "scriptBreakdown" should align visual beats (from frames) with audio beats (from transcript).
 
 Produce EXACTLY this JSON structure. Every field must be a rich paragraph (not bullets). Do not include any text outside the JSON:
 
 {{
-  "hook": "Type: [Named Hook Type] — VISUAL: [What the viewer SEES in first 3-5 seconds based on the frames — describe the actual visual content]. AUDIO: [What they hear, if anything]. Why it stops the scroll: [Psychological mechanism with name]",
+  "hook": "Type: [Named Hook Pattern — use exact names: Sexual Innuendo Bait-and-Switch / Sex Appeal Scroll-Stop / Body Movement Retention / Provocative Camera Framing / Curiosity Gap / Pattern Interrupt / etc.] — VISUAL: [What the viewer SEES in first 3-5 seconds — body positioning, clothing, camera angle, eye direction, arm placement, what it visually LOOKS LIKE before context clarifies]. AUDIO: [What they hear]. Why it stops the scroll: [The uncomfortable truth — sexual misdirection, cleavage framing, suggestive positioning, etc.]",
   "concept": "Big Idea: \\"[One-sentence idea]\\" [Full strategic architecture]. Secondary angles: [bulleted list]",
   "scriptBreakdown": "Framework: [Named Framework]. Narrative arc: (1) [Beat name] ([timecode]) — VISUAL: [what is shown] + AUDIO: [what is said]. (2) ... (3) ... (4) ... (5) ...",
   "visual": "A-Roll: [describe what you actually see in the frames — presenter appearance, setting, camera angle, lighting]. B-Roll: [product shots — describe the actual product appearance from frames]. C-Roll: [text overlays/graphics you can read in the frames, or 'NONE']",
@@ -82,14 +99,14 @@ Produce EXACTLY this JSON structure. Every field must be a rich paragraph (not b
   "cta": "[Mechanism] CTA — [what you see/hear in final frames]. [Landing page job description]",
   "keyTakeaways": "✅ STEAL: [What to replicate with {your_brand} implementation]\\n\\n✅ STEAL: [Second steal]\\n\\n🔨 KAIZEN: [Gap to exploit with {your_brand} action]\\n\\n🔨 KAIZEN: [Second kaizen]\\n\\n🚀 UPGRADE: [Where {your_brand} structurally wins]",
   "productionFormula": "🎬 {your_brand_upper} PRODUCTION FORMULA — {brand} Format Adaptation\\nFORMAT: [format spec]\\n\\nPHASE 01 — HOOK (0–5s)\\n[Screen direction based on what you saw in frames]\\n📝 \\"[Voiceover]\\"\\n🖥 TEXT SUPER: \\"[text visible in frames]\\"\\n\\nPHASE 02 — AGITATE (5–25s)\\n[Direction]\\n📝 \\"[VO]\\"\\n🖥 TEXT SUPER: \\"[text]\\"\\n\\nPHASE 03 — REVEAL (25–45s)\\n[Direction]\\n📝 \\"[VO]\\"\\n🖥 TEXT SUPER: \\"[text]\\"\\n\\nPHASE 04 — TRUST (45–80s)\\n[Direction]\\n📝 \\"[VO]\\"\\n🖥 TEXT SUPER: \\"[text]\\"\\n\\nPHASE 05 — CTA (80–95s)\\n[Direction]\\n📝 \\"[VO]\\"\\n🖥 TEXT SUPERS (MANDATORY): \\"[text]\\"",
-  "hookType": "[Short hook type label for filtering, e.g. Problem-Curiosity Hook]",
+  "hookType": "[Short hook type — use named patterns: Sexual Innuendo Bait-and-Switch, Sex Appeal Scroll-Stop, Body Movement Retention, Curiosity Gap, Pattern Interrupt, Problem Agitation, Social Proof Lead, Provocative Framing, etc.]",
   "primaryAngle": "[Short positioning angle, e.g. Taste-first positioning]",
   "frameworkName": "[Short framework name, e.g. PAS Compression]",
   "creativePattern": "EXACTLY one of: Problem-First UGC | Result-First Scroll Stop | Curiosity Gap | Social Proof Cascade | Comparison/Versus | Authority Demo | Unclassifiable"
 }}
 
 QUALITY RULES:
-- hook MUST describe the VISUAL execution first (what you see in frames), then audio, then psychological mechanism
+- hook MUST describe the VISUAL execution first (what you see in frames), then audio, then psychological mechanism. If the opening is sexually suggestive (body positioning, downward gaze, arm placement, revealing clothing, provocative framing), use the exact named pattern: "Sexual Innuendo Bait-and-Switch", "Sex Appeal Scroll-Stop", etc. NEVER sanitize to "person talking to camera"
 - scriptBreakdown MUST contain a named framework + numbered beats with timecodes, each beat has VISUAL + AUDIO
 - visual MUST describe real content from the provided frames — NOT generic descriptions
 - keyTakeaways MUST have ≥2 ✅ STEAL + ≥2 🔨 KAIZEN + 1 🚀 UPGRADE, all referencing {your_brand}

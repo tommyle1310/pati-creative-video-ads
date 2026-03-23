@@ -19,6 +19,7 @@ type AiProvider = "gemini" | "claude";
 interface Settings {
   geminiApiKey?: string;
   anthropicApiKey?: string;
+  groqApiKey?: string;
   aiProvider?: AiProvider;
   imageApiKey?: string;
   imageProvider?: ImageProvider;
@@ -59,10 +60,12 @@ export async function GET() {
   const settings = readSettings();
   const envGemini = process.env.GEMINI_API_KEY;
   const envAnthropic = process.env.ANTHROPIC_API_KEY;
+  const envGroq = process.env.GROQ_API_KEY;
   const envVidtory = process.env.VIDTORY_API_KEY;
 
   const hasCustomGemini = !!settings.geminiApiKey;
   const hasCustomAnthropic = !!settings.anthropicApiKey;
+  const hasCustomGroq = !!settings.groqApiKey;
   const hasCustomImage = !!settings.imageApiKey;
   const hasCustomVideo = !!settings.videoApiKey;
 
@@ -74,6 +77,10 @@ export async function GET() {
     anthropicApiKey: maskKey(hasCustomAnthropic ? settings.anthropicApiKey : envAnthropic),
     isUsingCustomAnthropicKey: hasCustomAnthropic,
     hasEnvAnthropicKey: !!envAnthropic,
+
+    groqApiKey: maskKey(hasCustomGroq ? settings.groqApiKey : envGroq),
+    isUsingCustomGroqKey: hasCustomGroq,
+    hasEnvGroqKey: !!envGroq,
 
     aiProvider: settings.aiProvider || "gemini",
 
@@ -104,6 +111,12 @@ export async function POST(request: NextRequest) {
     if (body.anthropicApiKey && typeof body.anthropicApiKey === "string" && body.anthropicApiKey.trim()) {
       settings.anthropicApiKey = body.anthropicApiKey.trim();
       process.env.ANTHROPIC_API_KEY = settings.anthropicApiKey;
+    }
+
+    // Groq key (for Whisper transcription)
+    if (body.groqApiKey && typeof body.groqApiKey === "string" && body.groqApiKey.trim()) {
+      settings.groqApiKey = body.groqApiKey.trim();
+      process.env.GROQ_API_KEY = settings.groqApiKey;
     }
 
     // AI provider toggle
@@ -137,6 +150,8 @@ export async function POST(request: NextRequest) {
       isUsingCustomGeminiKey: !!settings.geminiApiKey,
       anthropicApiKey: maskKey(settings.anthropicApiKey || process.env.ANTHROPIC_API_KEY),
       isUsingCustomAnthropicKey: !!settings.anthropicApiKey,
+      groqApiKey: maskKey(settings.groqApiKey || process.env.GROQ_API_KEY),
+      isUsingCustomGroqKey: !!settings.groqApiKey,
       aiProvider: settings.aiProvider || "gemini",
       imageApiKey: maskKey(settings.imageApiKey || envVidtory),
       imageProvider: settings.imageProvider || "vidtory",
@@ -168,6 +183,11 @@ export async function DELETE(request: NextRequest) {
       const envKey = readEnvKey("ANTHROPIC_API_KEY");
       if (envKey) process.env.ANTHROPIC_API_KEY = envKey;
     }
+    if (target === "groq" || target === "all") {
+      delete settings.groqApiKey;
+      const envKey = readEnvKey("GROQ_API_KEY");
+      if (envKey) process.env.GROQ_API_KEY = envKey;
+    }
     if (target === "image" || target === "all") {
       delete settings.imageApiKey;
       delete settings.imageProvider;
@@ -187,6 +207,8 @@ export async function DELETE(request: NextRequest) {
       isUsingCustomGeminiKey: !!settings.geminiApiKey,
       anthropicApiKey: maskKey(settings.anthropicApiKey || process.env.ANTHROPIC_API_KEY),
       isUsingCustomAnthropicKey: !!settings.anthropicApiKey,
+      groqApiKey: maskKey(settings.groqApiKey || process.env.GROQ_API_KEY),
+      isUsingCustomGroqKey: !!settings.groqApiKey,
       aiProvider: settings.aiProvider || "gemini",
       imageApiKey: maskKey(settings.imageApiKey || envVidtory),
       imageProvider: settings.imageProvider || "vidtory",

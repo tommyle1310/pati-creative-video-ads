@@ -136,13 +136,39 @@ export function useAnalysis() {
         );
         dispatch({ type: "SET_FRAMES", frames: thumbs });
 
-        // 2. Extract hi-res frames + audio client-side for Gemini analysis
+        // 2. Extract hi-res frames + audio client-side for analysis
         const [hiResFrames, audioBase64] = await Promise.all([
           extractFramesHiRes(s.uploadedVideoUrl, 30),
           s.uploadedVideoFile
             ? extractAudioBase64(s.uploadedVideoFile)
             : Promise.resolve(undefined),
         ]);
+
+        // 3. Check AI provider — if Claude, transcribe audio separately first
+        //    This splits audio and frames into two requests to stay within Vercel's 4.5MB body limit
+        let transcript: string | undefined;
+        let sendAudio = audioBase64;
+
+        try {
+          const settingsRes = await fetch("/api/settings");
+          const settings = await settingsRes.json();
+          if (settings.aiProvider === "claude" && audioBase64) {
+            // Transcribe audio via Groq Whisper in a separate request
+            const transcribeRes = await fetch("/api/studio/transcribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ audio: audioBase64 }),
+            });
+            if (transcribeRes.ok) {
+              const { transcript: t } = await transcribeRes.json();
+              transcript = t;
+            }
+            // Don't send audio to analyze — send transcript instead
+            sendAudio = undefined;
+          }
+        } catch {
+          // Settings fetch failed — fall through with audio as-is
+        }
 
         const analyzeRes = await fetch("/api/studio/analyze", {
           method: "POST",
@@ -151,7 +177,8 @@ export function useAnalysis() {
             frames: hiResFrames,
             fps: hiResFrames.length / Math.max(duration, 1),
             duration,
-            audio: audioBase64,
+            audio: sendAudio,
+            transcript,
           }),
         });
 

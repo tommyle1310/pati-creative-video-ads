@@ -55,7 +55,7 @@ export function VoicePicker() {
   const [newVoiceName, setNewVoiceName] = useState("");
   const [newVoiceDesc, setNewVoiceDesc] = useState("");
   const [newVoiceText, setNewVoiceText] = useState(
-    "The first move is what sets everything in motion."
+    "The first move is what sets everything in motion. Every great journey starts with a single step forward, and this is yours. Are you ready to begin?"
   );
   const [creating, setCreating] = useState(false);
   const [previews, setPreviews] = useState<VoicePreview[]>([]);
@@ -407,11 +407,16 @@ export function VoicePicker() {
                 <div>
                   <label className="text-[10px] text-muted-foreground font-medium">
                     Sample Text
+                    <span className={`ml-1 ${newVoiceText.length < 100 ? "text-red-400" : "text-emerald-400"}`}>
+                      ({newVoiceText.length}/100 min)
+                    </span>
                   </label>
                   <textarea
                     value={newVoiceText}
                     onChange={(e) => setNewVoiceText(e.target.value)}
-                    className="w-full bg-muted/50 border border-border rounded px-2 py-1.5 text-xs mt-1 h-12 resize-y"
+                    className={`w-full bg-muted/50 border rounded px-2 py-1.5 text-xs mt-1 h-12 resize-y ${
+                      newVoiceText.length < 100 ? "border-red-500/50" : "border-border"
+                    }`}
                   />
                 </div>
                 <button

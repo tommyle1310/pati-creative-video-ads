@@ -8,7 +8,7 @@ export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {
-    const { frames, fps, duration, audio } = await req.json();
+    const { frames, fps, duration, audio, transcript } = await req.json();
 
     if (!frames?.length || !fps || !duration) {
       return NextResponse.json({ error: "Missing frames, fps, or duration" }, { status: 400 });
@@ -27,9 +27,14 @@ export async function POST(req: NextRequest) {
     const overrides = systemInstruction ? { systemInstruction } : undefined;
 
     const provider = getAiProvider();
-    const analyze = provider === "claude" ? claudeAnalyze : geminiAnalyze;
-    const analysis = await analyze(limitedFrames, fps, duration, audio || undefined, overrides);
 
+    if (provider === "claude") {
+      // Claude can't process audio directly — uses pre-transcribed text from /api/studio/transcribe
+      const analysis = await claudeAnalyze(limitedFrames, fps, duration, undefined, overrides, transcript);
+      return NextResponse.json(analysis);
+    }
+
+    const analysis = await geminiAnalyze(limitedFrames, fps, duration, audio || undefined, overrides);
     return NextResponse.json(analysis);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Analysis failed";
