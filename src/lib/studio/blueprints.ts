@@ -35,11 +35,33 @@ export async function seedDefaultsIfNeeded(): Promise<boolean> {
     const prisma = getPrisma();
     if (!prisma) return false;
 
-    const count = await prisma.promptBlueprint.count();
-    if (count > 0) return false;
-
-    // Seed all default prompts (individual creates — createMany has issues with Neon HTTP adapter)
+    // Clean up duplicate defaults (keep only one isDefault per type)
     for (const type of PROMPT_TYPES) {
+      const defaults = await prisma.promptBlueprint.findMany({
+        where: { type, isDefault: true },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      });
+      if (defaults.length > 1) {
+        // Keep the first, delete the rest (individual deletes — Neon HTTP adapter doesn't support batch)
+        for (const dup of defaults.slice(1)) {
+          await prisma.promptBlueprint.delete({ where: { id: dup.id } });
+        }
+        console.log(`[Blueprints] Cleaned ${defaults.length - 1} duplicate defaults for ${type}`);
+      }
+    }
+
+    // Find which types are missing a default blueprint
+    const existing = await prisma.promptBlueprint.groupBy({
+      by: ["type"],
+    });
+    const existingTypes = new Set(existing.map((e) => e.type));
+    const missingTypes = PROMPT_TYPES.filter((t) => !existingTypes.has(t));
+
+    if (missingTypes.length === 0) return false;
+
+    // Seed missing default prompts (individual creates — createMany has issues with Neon HTTP adapter)
+    for (const type of missingTypes) {
       await prisma.promptBlueprint.create({
         data: {
           title: DEFAULT_PROMPTS[type].title,
@@ -54,7 +76,7 @@ export async function seedDefaultsIfNeeded(): Promise<boolean> {
       });
     }
 
-    console.log("[Blueprints] Seeded", PROMPT_TYPES.length, "default blueprints");
+    console.log("[Blueprints] Seeded", missingTypes.length, "default blueprints:", missingTypes.join(", "));
     return true;
   } catch (err) {
     console.warn("[Blueprints] Failed to seed defaults:", err);

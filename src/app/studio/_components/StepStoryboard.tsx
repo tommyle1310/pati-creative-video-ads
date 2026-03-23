@@ -78,7 +78,19 @@ export function StepStoryboard() {
                   </span>
                 )}
               </div>
-              <div className="flex gap-1">
+              <div className="flex items-center gap-1">
+                {scene.rollType && (
+                  <>
+                    <BlueprintSelector
+                      type={`enhance_${scene.rollType}_image` as "enhance_aroll_image" | "enhance_broll_image" | "enhance_croll_image"}
+                      label="Img"
+                    />
+                    <BlueprintSelector
+                      type={`enhance_${scene.rollType}_video` as "enhance_aroll_video" | "enhance_broll_video" | "enhance_croll_video"}
+                      label="Vid"
+                    />
+                  </>
+                )}
                 <button
                   onClick={() => handleEnhancePrompt(scene.id, "image")}
                   className="text-xs px-2 py-1 bg-muted hover:bg-muted/80 rounded flex items-center gap-1"

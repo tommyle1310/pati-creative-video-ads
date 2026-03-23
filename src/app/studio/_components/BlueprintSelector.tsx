@@ -28,7 +28,7 @@ interface BlueprintFull extends BlueprintMeta {
 }
 
 interface Props {
-  type: "analyze" | "script" | "storyboard" | "enhance" | "prompt_framework";
+  type: "analyze" | "script" | "storyboard" | "enhance" | "prompt_framework" | "enhance_aroll_image" | "enhance_aroll_video" | "enhance_broll_image" | "enhance_broll_video" | "enhance_croll_image" | "enhance_croll_video";
   label?: string;
 }
 
@@ -193,7 +193,7 @@ export function BlueprintSelector({ type, label }: Props) {
                   {/* Activate button */}
                   <button
                     onClick={() => handleActivate(bp.id)}
-                    disabled={bp.isActive || activating === bp.id}
+                    disabled={activating === bp.id}
                     className={`shrink-0 w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
                       bp.isActive
                         ? "border-emerald-500 bg-emerald-500"

@@ -313,6 +313,7 @@ export function useAssetGeneration() {
             promptType,
             productImage: s.productImage,
             creatorImage: s.creatorImage,
+            rollType: scene.rollType || undefined,
           }),
         });
         if (!res.ok) throw new Error((await res.json()).error);

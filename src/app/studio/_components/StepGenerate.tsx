@@ -288,6 +288,30 @@ export function StepGenerate() {
                     </div>
                   )}
 
+                  {/* Per-roll-type image + video blueprint selectors */}
+                  {scene.rollType && (
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-blue-400 uppercase tracking-wide font-medium">
+                          Img Blueprint
+                        </span>
+                        <BlueprintSelector
+                          type={`enhance_${scene.rollType}_image` as "enhance_aroll_image" | "enhance_broll_image" | "enhance_croll_image"}
+                          label={`${scene.rollType === "aroll" ? "A" : scene.rollType === "broll" ? "B" : "C"}-Roll Img`}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-emerald-400 uppercase tracking-wide font-medium">
+                          Vid Blueprint
+                        </span>
+                        <BlueprintSelector
+                          type={`enhance_${scene.rollType}_video` as "enhance_aroll_video" | "enhance_broll_video" | "enhance_croll_video"}
+                          label={`${scene.rollType === "aroll" ? "A" : scene.rollType === "broll" ? "B" : "C"}-Roll Vid`}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   {/* Editable prompts */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                     <div>

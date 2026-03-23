@@ -22,17 +22,24 @@ export async function POST(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    // Transaction: deactivate all of same type, then activate this one
-    const [, blueprint] = await prisma.$transaction([
-      prisma.promptBlueprint.updateMany({
-        where: { type: target.type, isActive: true },
-        data: { isActive: false },
-      }),
-      prisma.promptBlueprint.update({
-        where: { id },
-        data: { isActive: true },
-      }),
-    ]);
+    // Deactivate all of same type, then activate this one
+    // (individual updates — Neon HTTP adapter doesn't support transactions or updateMany)
+    const activeOnes = await prisma.promptBlueprint.findMany({
+      where: { type: target.type, isActive: true },
+      select: { id: true },
+    });
+    for (const a of activeOnes) {
+      if (a.id !== id) {
+        await prisma.promptBlueprint.update({
+          where: { id: a.id },
+          data: { isActive: false },
+        });
+      }
+    }
+    const blueprint = await prisma.promptBlueprint.update({
+      where: { id },
+      data: { isActive: true },
+    });
 
     return NextResponse.json({ blueprint });
   } catch (err) {
