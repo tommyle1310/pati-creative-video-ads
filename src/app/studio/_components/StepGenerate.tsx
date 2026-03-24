@@ -87,6 +87,25 @@ export function StepGenerate() {
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+              Image Model
+            </label>
+            <select
+              value={s.imageModel}
+              onChange={(e) =>
+                dispatch({
+                  type: "SET_FIELD",
+                  field: "imageModel",
+                  value: e.target.value,
+                })
+              }
+              className="bg-background border border-border rounded px-2 py-1.5 text-sm"
+            >
+              <option value="vidtory">Vidtory</option>
+              <option value="kling-3.0">Kling 3.0 (KIE)</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
               Video Model
             </label>
             <select
@@ -356,6 +375,17 @@ export function StepGenerate() {
                       <div className="flex items-center justify-between gap-1">
                         <span className="text-xs font-semibold flex items-center gap-1.5 text-blue-400">
                           <ImageIcon size={14} /> Images
+                          <span
+                            className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
+                              s.imageModel === "kling-3.0"
+                                ? "bg-orange-500/20 text-orange-400"
+                                : "bg-cyan-500/20 text-cyan-400"
+                            }`}
+                          >
+                            {s.imageModel === "kling-3.0"
+                              ? "Kling 3.0"
+                              : "Vidtory"}
+                          </span>
                         </span>
                         <div className="flex gap-1">
                           <button

@@ -1,5 +1,5 @@
 // ── KIE (Kling 3.0) Service (server-side only) ────────────────
-// Handles KIE API calls for Kling 3.0 video generation.
+// Handles KIE API calls for Kling 3.0 image and video generation.
 
 const KIE_BASE = "https://api.kie.ai/api/v1/jobs";
 
@@ -7,6 +7,55 @@ function getApiKey() {
   const key = process.env.KIE_API_KEY;
   if (!key) throw new Error("KIE_API_KEY not set");
   return key;
+}
+
+// ── Image Generation ─────────────────────────────────────────
+
+export async function generateImageKie(
+  prompt: string,
+  aspectRatio: string,
+  characterUrl?: string
+): Promise<string> {
+  const apiKey = getApiKey();
+
+  const input: Record<string, unknown> = {
+    prompt,
+    aspect_ratio: aspectRatio,
+    n: 1,
+  };
+
+  if (characterUrl) {
+    input.image_reference = {
+      type: "subject",
+      image_urls: [characterUrl],
+      weight: 0.6,
+    };
+  }
+
+  const body = {
+    model: "kling-3.0/image",
+    input,
+  };
+
+  const res = await fetch(`${KIE_BASE}/createTask`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    throw new Error(`KIE image gen failed: ${res.status} ${await res.text()}`);
+  }
+
+  const json = await res.json();
+  if (json.code !== 200) {
+    throw new Error(`KIE error: ${json.msg || JSON.stringify(json)}`);
+  }
+
+  return json.data.taskId;
 }
 
 // ── Video Generation ─────────────────────────────────────────

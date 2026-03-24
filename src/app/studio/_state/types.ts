@@ -28,7 +28,9 @@ export interface StudioState {
   analyzeError: string | null;
   // Step 3
   productImage: string | null;
+  productImages: string[];
   creatorImage: string | null;
+  creatorImages: string[];
   bigIdea: string;
   productInfo: string;
   targetAudience: string;
@@ -51,6 +53,7 @@ export interface StudioState {
   voice: string;
   voiceSource: "gemini" | "elevenlabs";
   voiceName: string;
+  imageModel: VideoModel;
   videoModel: VideoModel;
   // uploaded vidtory URLs (cached so we don't re-upload)
   productVidtoryUrl: string | null;
@@ -69,7 +72,11 @@ export type Action =
   | { type: "SET_ANALYZING"; v: boolean }
   | { type: "SET_ANALYZE_ERROR"; error: string | null }
   | { type: "SET_PRODUCT_IMAGE"; data: string }
+  | { type: "ADD_PRODUCT_IMAGES"; images: string[] }
+  | { type: "REMOVE_PRODUCT_IMAGE"; index: number }
   | { type: "SET_CREATOR_IMAGE"; data: string }
+  | { type: "ADD_CREATOR_IMAGES"; images: string[] }
+  | { type: "REMOVE_CREATOR_IMAGE"; index: number }
   | { type: "SET_FIELD"; field: keyof StudioState; value: unknown }
   | { type: "SET_SCRIPT_SCENES"; scriptScenes: ScriptScene[] }
   | { type: "UPDATE_SCRIPT_SCENE"; index: number; patch: Partial<ScriptScene> }

@@ -40,10 +40,57 @@ export function reducer(state: StudioState, action: Action): StudioState {
       };
     case "SET_ANALYZE_ERROR":
       return { ...state, analyzeError: action.error, isAnalyzing: false };
-    case "SET_PRODUCT_IMAGE":
-      return { ...state, productImage: action.data, productVidtoryUrl: null };
-    case "SET_CREATOR_IMAGE":
-      return { ...state, creatorImage: action.data, creatorVidtoryUrl: null };
+    case "SET_PRODUCT_IMAGE": {
+      // Set as primary; also add to gallery if not already there
+      const pImgs = action.data && !state.productImages.includes(action.data)
+        ? [...state.productImages, action.data]
+        : state.productImages;
+      return { ...state, productImage: action.data, productImages: pImgs, productVidtoryUrl: null };
+    }
+    case "ADD_PRODUCT_IMAGES": {
+      const newPImgs = [...state.productImages, ...action.images];
+      return {
+        ...state,
+        productImages: newPImgs,
+        productImage: state.productImage || newPImgs[0] || null,
+        productVidtoryUrl: null,
+      };
+    }
+    case "REMOVE_PRODUCT_IMAGE": {
+      const filtered = state.productImages.filter((_, i) => i !== action.index);
+      const removedWasPrimary = state.productImage === state.productImages[action.index];
+      return {
+        ...state,
+        productImages: filtered,
+        productImage: removedWasPrimary ? (filtered[0] || null) : state.productImage,
+        productVidtoryUrl: null,
+      };
+    }
+    case "SET_CREATOR_IMAGE": {
+      const cImgs = action.data && !state.creatorImages.includes(action.data)
+        ? [...state.creatorImages, action.data]
+        : state.creatorImages;
+      return { ...state, creatorImage: action.data, creatorImages: cImgs, creatorVidtoryUrl: null };
+    }
+    case "ADD_CREATOR_IMAGES": {
+      const newCImgs = [...state.creatorImages, ...action.images];
+      return {
+        ...state,
+        creatorImages: newCImgs,
+        creatorImage: state.creatorImage || newCImgs[0] || null,
+        creatorVidtoryUrl: null,
+      };
+    }
+    case "REMOVE_CREATOR_IMAGE": {
+      const cFiltered = state.creatorImages.filter((_, i) => i !== action.index);
+      const cRemovedWasPrimary = state.creatorImage === state.creatorImages[action.index];
+      return {
+        ...state,
+        creatorImages: cFiltered,
+        creatorImage: cRemovedWasPrimary ? (cFiltered[0] || null) : state.creatorImage,
+        creatorVidtoryUrl: null,
+      };
+    }
     case "SET_FIELD":
       return { ...state, [action.field]: action.value };
     case "SET_SCRIPT_SCENES":
@@ -87,7 +134,11 @@ export function reducer(state: StudioState, action: Action): StudioState {
         creatorVidtoryUrl: action.creator ?? state.creatorVidtoryUrl,
       };
     case "LOAD_PROJECT": {
-      const loaded = { ...initialState, ...action.state };
+      // Filter out undefined values so initialState defaults aren't overwritten
+      const cleaned = Object.fromEntries(
+        Object.entries(action.state).filter(([, v]) => v !== undefined)
+      );
+      const loaded = { ...initialState, ...cleaned };
       return { ...loaded, maxStepReached: loaded.step };
     }
     case "CLEAR_SOURCE":

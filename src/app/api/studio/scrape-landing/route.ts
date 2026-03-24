@@ -77,14 +77,18 @@ export async function POST(req: NextRequest) {
             {
               text: `You are a product research assistant. From the landing page text below, extract:
 
-1. **bigIdea**: The core value proposition / main hook of the product (1-2 sentences)
-2. **productInfo**: Key product details — ingredients, benefits, pricing, USPs, format (gummy/capsule/powder), serving size, flavors, etc. Be comprehensive.
-3. **targetAudience**: Who this product is marketed to based on the messaging, imagery descriptions, and language used.
+1. **name**: The product name exactly as shown
+2. **bigIdea**: The core value proposition / main hook of the product (1-2 sentences)
+3. **productInfo**: Key product details — ingredients, benefits, pricing, USPs, format (gummy/capsule/powder), serving size, flavors, etc. Be comprehensive.
+4. **targetAudience**: Who this product is marketed to based on the messaging, imagery descriptions, and language used.
+5. **price**: The main product price as a number (no currency symbol). If multiple prices, use the most common/default one. null if not found.
+6. **currency**: The currency code (USD, GBP, AUD, etc.) based on the page. Default "USD".
+7. **variants**: An array of product variants/options found, each with: { name: string, price: number, sku?: string }. Empty array if no variants found.
 
 Landing page content:
 ${combined}
 
-Return a JSON object with keys: bigIdea, productInfo, targetAudience`,
+Return a JSON object with keys: name, bigIdea, productInfo, targetAudience, price, currency, variants`,
             },
           ],
         },
@@ -94,11 +98,25 @@ Return a JSON object with keys: bigIdea, productInfo, targetAudience`,
         responseSchema: {
           type: "OBJECT" as const,
           properties: {
+            name: { type: "STRING" as const },
             bigIdea: { type: "STRING" as const },
             productInfo: { type: "STRING" as const },
             targetAudience: { type: "STRING" as const },
+            price: { type: "NUMBER" as const, nullable: true },
+            currency: { type: "STRING" as const },
+            variants: {
+              type: "ARRAY" as const,
+              items: {
+                type: "OBJECT" as const,
+                properties: {
+                  name: { type: "STRING" as const },
+                  price: { type: "NUMBER" as const },
+                },
+                required: ["name", "price"] as const,
+              },
+            },
           },
-          required: ["bigIdea", "productInfo", "targetAudience"] as const,
+          required: ["name", "bigIdea", "productInfo", "targetAudience"] as const,
         },
       },
     });

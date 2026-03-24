@@ -9,6 +9,7 @@ import {
   FileText,
   Clapperboard,
   Building2,
+  BookOpen,
   Settings,
 } from "lucide-react";
 
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { href: "/brand-products", label: "Brands", Icon: Building2 },
   { href: "/saved", label: "Saved", Icon: Bookmark },
   { href: "/briefs", label: "Briefs", Icon: FileText },
+  { href: "/prompt-library", label: "Prompt Library", Icon: BookOpen },
   { href: "/settings", label: "Settings", Icon: Settings },
 ];
 

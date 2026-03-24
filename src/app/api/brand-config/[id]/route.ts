@@ -76,6 +76,9 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
           bigIdea: p.bigIdea || null,
           productInfo: p.productInfo || null,
           targetAudience: p.targetAudience || null,
+          price: p.price ?? null,
+          currency: p.currency || "USD",
+          variants: p.variants || null,
         };
         if (p.id) {
           await prisma.product.update({ where: { id: p.id }, data });

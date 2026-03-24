@@ -12,12 +12,21 @@ import {
   Globe,
   X,
   User,
-  Volume2,
   Package,
   Save,
+  Wand2,
+  DollarSign,
+  Tags,
 } from "lucide-react";
+import { VoicePickerStandalone } from "@/app/components/VoicePickerStandalone";
 
 // ── Types ──
+
+interface VariantData {
+  name: string;
+  price: number;
+  sku?: string;
+}
 
 interface ProductData {
   id?: string;
@@ -27,6 +36,9 @@ interface ProductData {
   bigIdea: string;
   productInfo: string;
   targetAudience: string;
+  price: number | null;
+  currency: string;
+  variants: VariantData[];
 }
 
 interface CharacterData {
@@ -55,6 +67,9 @@ function emptyProduct(): ProductData {
     bigIdea: "",
     productInfo: "",
     targetAudience: "",
+    price: null,
+    currency: "USD",
+    variants: [],
   };
 }
 
@@ -92,6 +107,7 @@ function ProductCard({
   onRemove: () => void;
 }) {
   const [expanded, setExpanded] = useState(!product.id);
+  const [scraping, setScraping] = useState(false);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -109,16 +125,73 @@ function ProductCard({
     onChange({ ...product, landingPageUrls: urls });
   };
 
+  const handleAutoFill = async () => {
+    const urls = product.landingPageUrls.filter((u) => u.trim());
+    if (!urls.length) return;
+    setScraping(true);
+    try {
+      const res = await fetch("/api/studio/scrape-landing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls }),
+      });
+      if (!res.ok) throw new Error("Scrape failed");
+      const data = await res.json();
+      onChange({
+        ...product,
+        name: product.name || data.name || "",
+        bigIdea: product.bigIdea || data.bigIdea || "",
+        productInfo: product.productInfo || data.productInfo || "",
+        targetAudience: product.targetAudience || data.targetAudience || "",
+        price: product.price ?? data.price ?? null,
+        currency: product.currency || data.currency || "USD",
+        variants:
+          product.variants.length > 0
+            ? product.variants
+            : data.variants || [],
+      });
+    } catch {
+      /* silent */
+    } finally {
+      setScraping(false);
+    }
+  };
+
+  const addVariant = () => {
+    onChange({
+      ...product,
+      variants: [...product.variants, { name: "", price: 0 }],
+    });
+  };
+
+  const updateVariant = (idx: number, patch: Partial<VariantData>) => {
+    const variants = [...product.variants];
+    variants[idx] = { ...variants[idx], ...patch };
+    onChange({ ...product, variants });
+  };
+
+  const removeVariant = (idx: number) => {
+    onChange({
+      ...product,
+      variants: product.variants.filter((_, i) => i !== idx),
+    });
+  };
+
   return (
     <div className="border border-border rounded-lg overflow-hidden">
-      <button
-        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-muted/30 transition-colors text-left"
+      <div
+        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-muted/30 transition-colors text-left cursor-pointer"
         onClick={() => setExpanded(!expanded)}
       >
         <Package size={14} className="text-emerald-400 shrink-0" />
         <span className="text-sm font-medium flex-1 truncate">
           {product.name || "New Product"}
         </span>
+        {product.price != null && (
+          <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+            {product.currency} {product.price}
+          </span>
+        )}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -133,7 +206,7 @@ function ProductCard({
         ) : (
           <ChevronRight size={14} className="text-muted-foreground" />
         )}
-      </button>
+      </div>
 
       {expanded && (
         <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
@@ -150,12 +223,29 @@ function ProductCard({
             />
           </div>
 
-          {/* Landing Page URLs */}
+          {/* Landing Page URLs + Auto-fill */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <Globe size={12} />
-              Landing Page URLs
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <Globe size={12} />
+                Landing Page URLs
+              </label>
+              <button
+                onClick={handleAutoFill}
+                disabled={
+                  scraping ||
+                  !product.landingPageUrls.some((u) => u.trim())
+                }
+                className="flex items-center gap-1 text-[10px] px-2 py-1 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded font-medium"
+              >
+                {scraping ? (
+                  <Loader2 size={10} className="animate-spin" />
+                ) : (
+                  <Wand2 size={10} />
+                )}
+                {scraping ? "Scraping..." : "Auto-fill from URL"}
+              </button>
+            </div>
             {product.landingPageUrls.map((url, i) => (
               <div key={i} className="flex gap-1.5">
                 <input
@@ -193,6 +283,112 @@ function ProductCard({
             </button>
           </div>
 
+          {/* Price + Currency */}
+          <div className="grid grid-cols-[1fr_100px] gap-2">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <DollarSign size={12} />
+                Price
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={product.price ?? ""}
+                onChange={(e) =>
+                  onChange({
+                    ...product,
+                    price: e.target.value ? parseFloat(e.target.value) : null,
+                  })
+                }
+                placeholder="29.99"
+                className="w-full bg-background border border-border rounded px-3 py-2 text-sm mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">
+                Currency
+              </label>
+              <select
+                value={product.currency}
+                onChange={(e) =>
+                  onChange({ ...product, currency: e.target.value })
+                }
+                className="w-full bg-background border border-border rounded px-2 py-2 text-sm mt-1"
+              >
+                <option value="USD">USD</option>
+                <option value="GBP">GBP</option>
+                <option value="AUD">AUD</option>
+                <option value="EUR">EUR</option>
+                <option value="CAD">CAD</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Variants */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <Tags size={12} />
+                Variants
+              </label>
+              <button
+                onClick={addVariant}
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                <Plus size={12} /> Add Variant
+              </button>
+            </div>
+            {(product.variants ?? []).length === 0 ? (
+              <p className="text-[10px] text-muted-foreground italic">
+                No variants
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {(product.variants ?? []).map((v, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-1.5 bg-muted/20 rounded px-2 py-1.5"
+                  >
+                    <input
+                      value={v.name}
+                      onChange={(e) =>
+                        updateVariant(i, { name: e.target.value })
+                      }
+                      placeholder="Variant name"
+                      className="flex-1 bg-background border border-border rounded px-2 py-1 text-xs"
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={v.price || ""}
+                      onChange={(e) =>
+                        updateVariant(i, {
+                          price: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      placeholder="Price"
+                      className="w-20 bg-background border border-border rounded px-2 py-1 text-xs"
+                    />
+                    <input
+                      value={v.sku || ""}
+                      onChange={(e) =>
+                        updateVariant(i, { sku: e.target.value || undefined })
+                      }
+                      placeholder="SKU"
+                      className="w-24 bg-background border border-border rounded px-2 py-1 text-xs"
+                    />
+                    <button
+                      onClick={() => removeVariant(i)}
+                      className="p-1 text-muted-foreground hover:text-red-400"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Product Images */}
           <div>
             <label className="text-xs font-medium text-muted-foreground">
@@ -208,7 +404,9 @@ function ProductCard({
                   />
                   <button
                     onClick={() => {
-                      const imgs = product.images.filter((_, idx) => idx !== i);
+                      const imgs = product.images.filter(
+                        (_, idx) => idx !== i
+                      );
                       onChange({ ...product, images: imgs });
                     }}
                     className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -305,14 +503,25 @@ function CharacterCard({
 
   return (
     <div className="border border-border rounded-lg overflow-hidden">
-      <button
-        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-muted/30 transition-colors text-left"
+      <div
+        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-muted/30 transition-colors text-left cursor-pointer"
         onClick={() => setExpanded(!expanded)}
       >
         <User size={14} className="text-violet-400 shrink-0" />
         <span className="text-sm font-medium flex-1 truncate">
           {character.name || "New Character"}
         </span>
+        {character.voiceName && (
+          <span
+            className={`text-[9px] px-1 py-0.5 rounded ${
+              character.voiceSource === "elevenlabs"
+                ? "bg-violet-500/20 text-violet-400"
+                : "bg-cyan-500/20 text-cyan-400"
+            }`}
+          >
+            {character.voiceName}
+          </span>
+        )}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -327,7 +536,7 @@ function CharacterCard({
         ) : (
           <ChevronRight size={14} className="text-muted-foreground" />
         )}
-      </button>
+      </div>
 
       {expanded && (
         <div className="px-4 pb-4 space-y-3 border-t border-border pt-3">
@@ -393,49 +602,26 @@ function CharacterCard({
             </div>
           </div>
 
-          {/* Voice */}
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                <Volume2 size={10} /> Voice Source
-              </label>
-              <select
-                value={character.voiceSource}
-                onChange={(e) =>
-                  onChange({ ...character, voiceSource: e.target.value })
-                }
-                className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm mt-1"
-              >
-                <option value="gemini">Gemini</option>
-                <option value="elevenlabs">ElevenLabs</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">
-                Voice Name
-              </label>
-              <input
-                value={character.voiceName}
-                onChange={(e) =>
-                  onChange({ ...character, voiceName: e.target.value })
-                }
-                placeholder="Kore"
-                className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm mt-1"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">
-                Voice ID
-              </label>
-              <input
-                value={character.voiceId}
-                onChange={(e) =>
-                  onChange({ ...character, voiceId: e.target.value })
-                }
-                placeholder="voice_id or name"
-                className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm mt-1"
-              />
-            </div>
+          {/* Voice — using VoicePickerStandalone */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">
+              Voice
+            </label>
+            <VoicePickerStandalone
+              value={{
+                voiceId: character.voiceId,
+                voiceSource: character.voiceSource,
+                voiceName: character.voiceName,
+              }}
+              onChange={(v) =>
+                onChange({
+                  ...character,
+                  voiceId: v.voiceId,
+                  voiceSource: v.voiceSource,
+                  voiceName: v.voiceName,
+                })
+              }
+            />
           </div>
         </div>
       )}
@@ -571,7 +757,10 @@ export default function BrandProductsPage() {
           {/* Brand list */}
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <Loader2 size={20} className="animate-spin text-muted-foreground" />
+              <Loader2
+                size={20}
+                className="animate-spin text-muted-foreground"
+              />
             </div>
           ) : brands.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
@@ -647,7 +836,10 @@ export default function BrandProductsPage() {
                 <button
                   onClick={() =>
                     updateBrand({
-                      products: [...selectedBrand.products, emptyProduct()],
+                      products: [
+                        ...selectedBrand.products,
+                        emptyProduct(),
+                      ],
                     })
                   }
                   className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300"

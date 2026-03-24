@@ -72,7 +72,12 @@ export function useAssetGeneration() {
         if (scene.imageCameraAngle)
           prompt = `${scene.imageCameraAngle} shot. ${prompt}`;
 
-        const res = await fetch("/api/studio/generate-image", {
+        const useKie = s.imageModel === "kling-3.0";
+        const endpoint = useKie
+          ? "/api/studio/kie-generate-image"
+          : "/api/studio/generate-image";
+
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -91,7 +96,9 @@ export function useAssetGeneration() {
           patch: { imageJobId: jobId },
         });
 
-        const imageUrl = await pollJob(jobId, 5000, 300000);
+        const imageUrl = useKie
+          ? await pollKieJob(jobId, 5000, 300000)
+          : await pollJob(jobId, 5000, 300000);
 
         dispatch({
           type: "UPDATE_SCENE",
@@ -114,102 +121,7 @@ export function useAssetGeneration() {
         });
       }
     },
-    [s.scenes, s.aspectRatio, ensureVidtoryUploads, dispatch]
-  );
-
-  const handleGenerateVideo = useCallback(
-    async (sceneId: string) => {
-      const scene = s.scenes.find((sc) => sc.id === sceneId);
-      if (!scene?.selectedImageForVideo) return;
-
-      dispatch({
-        type: "UPDATE_SCENE",
-        id: sceneId,
-        patch: { isGeneratingVideo: true, videoGenerationError: null },
-      });
-
-      try {
-        const vpStr =
-          typeof scene.videoPrompt === "object"
-            ? JSON.stringify(scene.videoPrompt)
-            : scene.videoPrompt;
-        const rollType = scene.rollType || "broll";
-        const allowLipsync =
-          rollType === "aroll" && scene.includeDialogueInPrompt;
-        let prompt = `Motion/Action: ${vpStr}`;
-        if (allowLipsync) {
-          prompt = `The creator is speaking.\n${prompt}`;
-          prompt += `\nDialogue in English: "${scene.voiceoverScript}"`;
-        }
-        if (rollType !== "aroll") {
-          prompt +=
-            "\n\nThe subject does NOT speak. No lip movement. No mouth movement. No lip sync. No dialogue. Completely silent character.";
-        }
-        prompt +=
-          "\n\nAUDIO CONSTRAINT: Absolutely NO background music. NO ambient sounds. NO sound effects. NO soundtrack. Complete silence except for voiceover if present. No Music Background.";
-        if (rollType === "aroll") {
-          if (!prompt.includes("Shot on"))
-            prompt +=
-              "\nShot on iPhone 15 Pro, portrait mode, f/1.8. 1600 ISO grain. No color grade. Unfiltered.";
-        } else {
-          if (!prompt.includes("Shot on"))
-            prompt +=
-              "\nPhotorealistic, shot on Sony A7IV, 85mm lens, natural color grading.";
-        }
-
-        const useKie = s.videoModel === "kling-3.0";
-        const endpoint = useKie
-          ? "/api/studio/kie-generate-video"
-          : "/api/studio/generate-video";
-
-        const res = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt,
-            aspectRatio: s.aspectRatio,
-            startImageUrl: scene.selectedImageForVideo,
-            duration: 5,
-            ...(useKie ? { mode: "std" } : {}),
-          }),
-        });
-        if (!res.ok) throw new Error((await res.json()).error);
-        const { jobId } = await res.json();
-
-        dispatch({
-          type: "UPDATE_SCENE",
-          id: sceneId,
-          patch: { videoJobId: jobId },
-        });
-
-        const videoUrl = useKie
-          ? await pollKieJob(jobId, 10000, 900000)
-          : await pollJob(jobId, 10000, 900000);
-
-        dispatch({
-          type: "UPDATE_SCENE",
-          id: sceneId,
-          patch: {
-            videos: [
-              ...scene.videos,
-              { url: videoUrl, mediaGenerationId: jobId, seed: 0 },
-            ],
-            isGeneratingVideo: false,
-          },
-        });
-      } catch (err) {
-        dispatch({
-          type: "UPDATE_SCENE",
-          id: sceneId,
-          patch: {
-            isGeneratingVideo: false,
-            videoGenerationError:
-              err instanceof Error ? err.message : "Failed",
-          },
-        });
-      }
-    },
-    [s.scenes, s.aspectRatio, s.videoModel, dispatch]
+    [s.scenes, s.aspectRatio, s.imageModel, ensureVidtoryUploads, dispatch]
   );
 
   const handleGenerateAudio = useCallback(
@@ -273,6 +185,110 @@ export function useAssetGeneration() {
       }
     },
     [s.scenes, s.voice, s.voiceSource, dispatch]
+  );
+
+  const handleGenerateVideo = useCallback(
+    async (sceneId: string) => {
+      const scene = s.scenes.find((sc) => sc.id === sceneId);
+      if (!scene?.selectedImageForVideo) return;
+
+      dispatch({
+        type: "UPDATE_SCENE",
+        id: sceneId,
+        patch: { isGeneratingVideo: true, videoGenerationError: null },
+      });
+
+      try {
+        const vpStr =
+          typeof scene.videoPrompt === "object"
+            ? JSON.stringify(scene.videoPrompt)
+            : scene.videoPrompt;
+        const rollType = scene.rollType || "broll";
+        const allowLipsync =
+          rollType === "aroll" && scene.includeDialogueInPrompt;
+        let prompt = `Motion/Action: ${vpStr}`;
+        if (allowLipsync) {
+          prompt = `The creator is speaking.\n${prompt}`;
+          prompt += `\nDialogue in English: "${scene.voiceoverScript}"`;
+        }
+        if (rollType !== "aroll") {
+          prompt +=
+            "\n\nThe subject does NOT speak. No lip movement. No mouth movement. No lip sync. No dialogue. Completely silent character.";
+        }
+        prompt +=
+          "\n\nAUDIO CONSTRAINT: Absolutely NO background music. NO ambient sounds. NO sound effects. NO soundtrack. Complete silence except for voiceover if present. No Music Background.";
+        if (rollType === "aroll") {
+          if (!prompt.includes("Shot on"))
+            prompt +=
+              "\nShot on iPhone 15 Pro, portrait mode, f/1.8. 1600 ISO grain. No color grade. Unfiltered.";
+        } else {
+          if (!prompt.includes("Shot on"))
+            prompt +=
+              "\nPhotorealistic, shot on Sony A7IV, 85mm lens, natural color grading.";
+        }
+
+        // Auto-generate audio in parallel when lipsync is ON and no audio exists yet
+        let audioPromise: Promise<void> | null = null;
+        if (allowLipsync && !scene.audioUrl && !scene.isGeneratingAudio) {
+          audioPromise = handleGenerateAudio(sceneId);
+        }
+
+        const useKie = s.videoModel === "kling-3.0";
+        const endpoint = useKie
+          ? "/api/studio/kie-generate-video"
+          : "/api/studio/generate-video";
+
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt,
+            aspectRatio: s.aspectRatio,
+            startImageUrl: scene.selectedImageForVideo,
+            duration: 5,
+            ...(useKie ? { mode: "std" } : {}),
+          }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error);
+        const { jobId } = await res.json();
+
+        dispatch({
+          type: "UPDATE_SCENE",
+          id: sceneId,
+          patch: { videoJobId: jobId },
+        });
+
+        const videoUrl = useKie
+          ? await pollKieJob(jobId, 10000, 900000)
+          : await pollJob(jobId, 10000, 900000);
+
+        dispatch({
+          type: "UPDATE_SCENE",
+          id: sceneId,
+          patch: {
+            videos: [
+              ...scene.videos,
+              { url: videoUrl, mediaGenerationId: jobId, seed: 0 },
+            ],
+            isGeneratingVideo: false,
+          },
+        });
+
+        // Wait for audio to finish too (errors handled inside handleGenerateAudio)
+        if (audioPromise) await audioPromise;
+      } catch (err) {
+        dispatch({
+          type: "UPDATE_SCENE",
+          id: sceneId,
+          patch: {
+            isGeneratingVideo: false,
+            videoGenerationError:
+              err instanceof Error ? err.message : "Failed",
+          },
+        });
+      }
+    },
+    [s.scenes, s.aspectRatio, s.videoModel, dispatch, handleGenerateAudio]
   );
 
   const handleGenerateAllImages = useCallback(async () => {

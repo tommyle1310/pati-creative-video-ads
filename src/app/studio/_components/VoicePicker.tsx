@@ -82,6 +82,13 @@ export function VoicePicker() {
     }
   }, [voicesLoaded]);
 
+  // Sync tab to current voiceSource when popover opens
+  useEffect(() => {
+    if (open) {
+      setTab(s.voiceSource === "elevenlabs" ? "elevenlabs" : "gemini");
+    }
+  }, [open, s.voiceSource]);
+
   useEffect(() => {
     if (open && tab === "elevenlabs" && !voicesLoaded) {
       fetchVoices();
@@ -340,19 +347,27 @@ export function VoicePicker() {
                         }`}
                       >
                         {v.preview_url && (
-                          <button
+                          <span
+                            role="button"
+                            tabIndex={0}
                             onClick={(e) => {
                               e.stopPropagation();
                               playPreview(v.preview_url);
                             }}
-                            className="shrink-0 p-0.5 hover:text-violet-400"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.stopPropagation();
+                                playPreview(v.preview_url);
+                              }
+                            }}
+                            className="shrink-0 p-0.5 hover:text-violet-400 cursor-pointer"
                           >
                             {playingUrl === v.preview_url ? (
                               <Pause size={10} />
                             ) : (
                               <Play size={10} />
                             )}
-                          </button>
+                          </span>
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="truncate">{v.name}</div>

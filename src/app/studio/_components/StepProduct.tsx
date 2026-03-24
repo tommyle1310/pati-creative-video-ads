@@ -184,16 +184,21 @@ export function StepProduct() {
       dispatch({ type: "SET_PRODUCT_IMAGE", data: selectedProduct.images[0] });
   };
 
-  const handleImageUpload = useCallback(
+  const handleMultiImageUpload = useCallback(
     async (
       e: React.ChangeEvent<HTMLInputElement>,
-      field: "SET_PRODUCT_IMAGE" | "SET_CREATOR_IMAGE"
+      target: "product" | "creator"
     ) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
-      // For product image: use first file as primary
-      const base64 = await fileToBase64(files[0]);
-      dispatch({ type: field, data: base64 });
+      const images: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        images.push(await fileToBase64(files[i]));
+      }
+      dispatch({
+        type: target === "product" ? "ADD_PRODUCT_IMAGES" : "ADD_CREATOR_IMAGES",
+        images,
+      });
     },
     [dispatch]
   );
@@ -306,93 +311,108 @@ export function StepProduct() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Product image */}
+        {/* Product images */}
         <div className="space-y-2">
           <label className="text-sm font-medium">
-            Product Image <span className="text-red-400">*</span>
+            Product Images <span className="text-red-400">*</span>
           </label>
-          <label className="block border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-muted-foreground transition-colors relative group">
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => handleImageUpload(e, "SET_PRODUCT_IMAGE")}
-            />
-            {s.productImage ? (
-              <>
-                <img
-                  src={s.productImage}
-                  alt="Product"
-                  className="h-32 mx-auto rounded"
-                />
+          <div className="flex flex-wrap gap-2">
+            {s.productImages.map((img, i) => (
+              <div
+                key={i}
+                className={`relative group cursor-pointer rounded-lg border-2 transition-all overflow-hidden ${
+                  s.productImage === img
+                    ? "border-emerald-500 ring-1 ring-emerald-500/30"
+                    : "border-border hover:border-muted-foreground"
+                }`}
+                onClick={() => dispatch({ type: "SET_PRODUCT_IMAGE", data: img })}
+              >
+                <img src={img} alt={`Product ${i + 1}`} className="h-28 w-28 object-cover" />
+                {s.productImage === img && (
+                  <span className="absolute bottom-1 left-1 text-[8px] bg-emerald-600 text-white px-1.5 py-0.5 rounded">
+                    primary
+                  </span>
+                )}
                 <button
                   onClick={(e) => {
-                    e.preventDefault();
                     e.stopPropagation();
-                    dispatch({ type: "SET_PRODUCT_IMAGE", data: "" });
+                    dispatch({ type: "REMOVE_PRODUCT_IMAGE", index: i });
                   }}
-                  className="absolute top-2 right-2 bg-red-500/90 hover:bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute top-1 right-1 bg-red-500/90 hover:bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
-                  <Trash2 size={12} />
+                  <X size={10} />
                 </button>
-              </>
-            ) : (
-              <>
-                <ImageIcon
-                  size={24}
-                  className="mx-auto mb-2 text-muted-foreground"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Upload product image
-                </p>
-              </>
-            )}
-          </label>
+              </div>
+            ))}
+            <label className="h-28 w-28 border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-muted-foreground transition-colors shrink-0">
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => handleMultiImageUpload(e, "product")}
+              />
+              <Plus size={16} className="text-muted-foreground mb-1" />
+              <span className="text-[10px] text-muted-foreground">Add</span>
+            </label>
+          </div>
+          {s.productImages.length > 1 && (
+            <p className="text-[10px] text-muted-foreground">
+              Click an image to set it as primary (used in generation).
+            </p>
+          )}
         </div>
 
-        {/* Creator image */}
+        {/* Creator images */}
         <div className="space-y-2">
           <label className="text-sm font-medium">
-            Creator/Character Image (optional)
+            Creator/Character Images (optional)
           </label>
-          <label className="block border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-muted-foreground transition-colors relative group">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => handleImageUpload(e, "SET_CREATOR_IMAGE")}
-            />
-            {s.creatorImage ? (
-              <>
-                <img
-                  src={s.creatorImage}
-                  alt="Creator"
-                  className="h-32 mx-auto rounded"
-                />
+          <div className="flex flex-wrap gap-2">
+            {s.creatorImages.map((img, i) => (
+              <div
+                key={i}
+                className={`relative group cursor-pointer rounded-lg border-2 transition-all overflow-hidden ${
+                  s.creatorImage === img
+                    ? "border-violet-500 ring-1 ring-violet-500/30"
+                    : "border-border hover:border-muted-foreground"
+                }`}
+                onClick={() => dispatch({ type: "SET_CREATOR_IMAGE", data: img })}
+              >
+                <img src={img} alt={`Creator ${i + 1}`} className="h-28 w-28 object-cover" />
+                {s.creatorImage === img && (
+                  <span className="absolute bottom-1 left-1 text-[8px] bg-violet-600 text-white px-1.5 py-0.5 rounded">
+                    primary
+                  </span>
+                )}
                 <button
                   onClick={(e) => {
-                    e.preventDefault();
                     e.stopPropagation();
-                    dispatch({ type: "SET_CREATOR_IMAGE", data: "" });
+                    dispatch({ type: "REMOVE_CREATOR_IMAGE", index: i });
                   }}
-                  className="absolute top-2 right-2 bg-red-500/90 hover:bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute top-1 right-1 bg-red-500/90 hover:bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
-                  <Trash2 size={12} />
+                  <X size={10} />
                 </button>
-              </>
-            ) : (
-              <>
-                <ImageIcon
-                  size={24}
-                  className="mx-auto mb-2 text-muted-foreground"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Upload creator face
-                </p>
-              </>
-            )}
-          </label>
+              </div>
+            ))}
+            <label className="h-28 w-28 border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-muted-foreground transition-colors shrink-0">
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => handleMultiImageUpload(e, "creator")}
+              />
+              <Plus size={16} className="text-muted-foreground mb-1" />
+              <span className="text-[10px] text-muted-foreground">Add</span>
+            </label>
+          </div>
+          {s.creatorImages.length > 1 && (
+            <p className="text-[10px] text-muted-foreground">
+              Click an image to set it as primary (used for face reference).
+            </p>
+          )}
         </div>
       </div>
 

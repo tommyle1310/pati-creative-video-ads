@@ -19,16 +19,17 @@ import { AnnouncementDialog } from "../components/AnnouncementDialog";
 
 function StudioContent() {
   const { s } = useStudio();
-  const [showWizard, setShowWizard] = useState(false);
+  // null = auto-detect, true = forced wizard, false = forced dashboard
+  const [showWizard, setShowWizard] = useState<boolean | null>(null);
 
-  // If user has an active project in progress, go directly to wizard
+  // If user has an active project in progress, default to wizard
   const hasActiveWork =
     s.currentProjectId ||
     s.sourceType ||
     s.analysis ||
     s.scriptScenes.length > 0;
 
-  const wizardActive = showWizard || hasActiveWork;
+  const wizardActive = showWizard === null ? !!hasActiveWork : showWizard;
 
   return (
     <div className="min-h-screen p-6 space-y-6">
