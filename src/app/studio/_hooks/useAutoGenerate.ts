@@ -367,6 +367,34 @@ function getBrollScene(sceneIndex: number): { outfit: string; img: string; video
   return BROLL_SCENES[sceneIndex % BROLL_SCENES.length];
 }
 
+// ── Infer outfit from scene description ──────────────────────
+
+function inferOutfitFromScene(visual: string): string {
+  const v = visual.toLowerCase();
+  if (/gym|workout|exercise|dumbbell|push.?up|squat|deadlift|bench|weight/i.test(v))
+    return "athletic tank top, leggings or gym shorts, training shoes";
+  if (/yoga|stretch|mat|meditat/i.test(v))
+    return "fitted sports top, yoga leggings, barefoot";
+  if (/run|jog|sprint|trail|park.*walk/i.test(v))
+    return "athletic shorts, running top, running shoes";
+  if (/kitchen|cook|chop|stir|stove|counter|breakfast|coffee|mug/i.test(v))
+    return "casual t-shirt and jeans, barefoot or slippers";
+  if (/bed|morning|wake|pillow|pyjama|alarm/i.test(v))
+    return "soft pyjamas or sleep shirt, bare feet";
+  if (/bathroom|mirror|brush|wash|shower/i.test(v))
+    return "plain t-shirt or tank top, comfortable shorts";
+  if (/office|desk|laptop|computer|work|typing/i.test(v))
+    return "smart-casual button-up or sweater, comfortable trousers";
+  if (/outdoor|nature|hike|trail|sun|beach/i.test(v))
+    return "light jacket or tee, comfortable pants, sneakers";
+  if (/grocery|store|shop|market|cart/i.test(v))
+    return "casual top, jeans, comfortable flats or sneakers";
+  if (/couch|sofa|living.?room|tv|phone|relax/i.test(v))
+    return "oversized sweater, comfortable joggers, cozy socks";
+  // Default casual
+  return "casual t-shirt and comfortable pants";
+}
+
 // ── Concurrency helper ───────────────────────────────────────
 
 async function runConcurrent<T>(
@@ -674,12 +702,22 @@ export function useAutoGenerate() {
       // Local tracker for selectedImageForVideo per scene
       const sceneImageMap = new Map<string, string>();
 
-      // Map scene id → index for clothing variation
+      // Map scene id → index
       const sceneIndexMap = new Map<string, number>();
       storyboardScenes.forEach((sc, i) => sceneIndexMap.set(sc.id, i));
 
-      // Track product-showing scenes (max 2 in entire video)
-      let productSceneCount = 0;
+      // Track which scenes show product (no cap — every product scene gets the ref)
+      // Previously capped at 2, causing later scenes to fabricate the product.
+
+      // ── Build original scene map from analysis ──
+      // Each storyboard scene should clone the ORIGINAL video's corresponding scene
+      const originalScenes = analysis.sceneBreakdown || [];
+      function getOriginalScene(idx: number) {
+        if (idx < originalScenes.length) {
+          return originalScenes[idx];
+        }
+        return null; // fallback to generic BROLL_SCENES
+      }
 
       await runConcurrent(
         storyboardScenes,
@@ -692,83 +730,88 @@ export function useAutoGenerate() {
           });
 
           try {
-            let prompt =
+            const storyboardPrompt =
               typeof scene.imagePrompt === "object"
                 ? JSON.stringify(scene.imagePrompt)
                 : scene.imagePrompt;
             const rollType = scene.rollType || "broll";
             const sceneIdx = sceneIndexMap.get(scene.id) || 0;
 
-            // ── GENDER ENFORCEMENT (ALL scenes same gender as primary character) ──
+            // ── GENDER ──
             const genderWord = detectedGender === "female" ? "woman" : detectedGender === "male" ? "man" : "person";
             const genderAdj = detectedGender === "female" ? "female" : detectedGender === "male" ? "male" : "";
-            // Replace wrong-gender words
-            if (detectedGender === "female") {
-              prompt = prompt.replace(/\b(man|male|guy|him|his|he\b|boy|gentleman|husband|father)\b/gi, genderWord);
-            } else if (detectedGender === "male") {
-              prompt = prompt.replace(/\b(woman|female|girl|her|she\b|lady|wife|mother)\b/gi, genderWord);
-            }
 
-            // Get scene context FIRST, then build prompt around it
-            const brollScene = getBrollScene(sceneIdx);
-            const CAMERA_ANGLES = [
-              "slightly from the left", "slightly from the right",
-              "from a low angle looking up", "straight on at eye level",
-              "from slightly above", "over the shoulder from behind",
-              "from the side profile", "three-quarter view from the left",
-            ];
-            const cameraAngle = CAMERA_ANGLES[sceneIdx % CAMERA_ANGLES.length];
+            // ── ORIGINAL SCENE from video analysis (the source of truth) ──
+            const origScene = getOriginalScene(sceneIdx);
+            const fallbackScene = getBrollScene(sceneIdx);
 
-            // Max 2 product-holding scenes in entire video
-            const isProductScene = productSceneCount < 2 && rollType !== "aroll" && (sceneIdx % 5 < 2);
+            // Use original visual description — this is what happened in the
+            // source video. We replicate the same action with our character.
+            const originalVisual = origScene?.visual || fallbackScene.img;
+            const originalType = origScene?.type?.toLowerCase() || rollType;
 
-            // ── GLOBAL REALISM RULES (all rolls) ──
-            const realismRules = `\nPHOTO REALISM: Visible skin texture, pores, and imperfections (freckles, small blemishes, uneven skin tone). Natural body proportions. Ambient lighting that matches the environment — NO studio rim light, NO dramatic backlighting unless outdoors. Shallow depth of field but background still recognizable (NOT blurred to oblivion). The ${genderWord} has natural skin — NOT airbrushed, NOT porcelain smooth.`;
+            // Swap competitor brand/product references for our product
+            let clonedVisual = originalVisual
+              .replace(/\b(competitor|brand|their product|the product)\b/gi, "our product")
+              .replace(/\b(his|he|him|man|male|guy)\b/gi, detectedGender === "female" ? genderWord : "$&")
+              .replace(/\b(her|she|woman|female|girl)\b/gi, detectedGender === "male" ? genderWord : "$&");
 
-            if (rollType === "aroll") {
-              // A-ROLL: direct to camera, selfie-style
-              const arollOutfits = [
-                "casual plain t-shirt", "comfortable hoodie",
-                "simple crew-neck sweater", "relaxed button-up shirt",
-                "fitted long-sleeve top", "soft henley shirt",
-              ];
-              const arollOutfit = arollOutfits[sceneIdx % arollOutfits.length];
-              prompt = `The person in this image MUST be the EXACT same person shown in the first reference image. Same face, same facial features, same skin tone, same hair color and style, same gender (${genderAdj}). This is the SAME character across all scenes.\n\nA ${genderAdj} ${genderWord} looking DIRECTLY into the camera lens with confident eye contact. ${prompt}`;
-              prompt += `\nWearing: ${arollOutfit}.`;
-              prompt += `\nCamera angle: straight on, selfie distance (arm's length). Frontal face fully visible. Close-up head and shoulders.`;
-              prompt += `\nThis is a direct-to-camera talking head — like an iPhone selfie video. Natural indoor or outdoor lighting. Shot on iPhone 15 Pro, portrait mode, f/1.8. Slight grain, unfiltered, no color grade.`;
+            // ── CHARACTER CONSISTENCY ──
+            const charMatch = `The person MUST be the EXACT same ${genderAdj} ${genderWord} shown in the first reference image. Same face, same facial features, same skin tone, same hair color and style, same gender (${genderAdj}). This is the SAME creator/character across ALL scenes.\nCRITICAL: IGNORE the clothing/outfit from the reference image. The character's outfit for THIS scene is specified below — use ONLY the described outfit, NOT what they wear in the reference photo.\n\n`;
+
+            // ── REALISM RULES ──
+            const realismRules = `\nPHOTO REALISM: Visible skin texture, pores, imperfections. Natural body proportions. Ambient lighting matching the environment — no studio rim light. Background recognizable (not blurred to oblivion). Natural skin — not airbrushed.`;
+
+            // ── Detect if this scene should show product ──
+            const origHasProduct = /product|package|pouch|bag|gummies|bottle|supplement|pour|hold.*pack/i.test(originalVisual);
+            const storyboardMentionsProduct = /product|package|pouch|bag|gummies|bottle|supplement|pour|hold/i.test(storyboardPrompt);
+            const isProductScene = (origHasProduct || storyboardMentionsProduct) && rollType !== "aroll";
+
+            let prompt: string;
+
+            if (rollType === "aroll" || originalType.includes("a-roll") || originalType.includes("aroll")) {
+              // ── A-ROLL: clone the original's talking-head style ──
+              const arollOutfit = origScene ? inferOutfitFromScene(clonedVisual) : "casual t-shirt and comfortable pants";
+              prompt = `${charMatch}A ${genderAdj} ${genderWord} looking DIRECTLY into the camera lens with confident eye contact.`;
+              prompt += `\n\nCLONING ORIGINAL SCENE: "${clonedVisual}"`;
+              prompt += `\nAdapt this scene with our character but keep the same framing, energy, and context.`;
+              prompt += `\n\nStoryboard direction: ${storyboardPrompt}`;
+              prompt += `\nWearing: ${arollOutfit}. (DO NOT use the outfit from the reference image.)`;
+              prompt += `\nCamera: straight on, selfie distance (arm's length). Frontal face fully visible. Close-up head and shoulders.`;
+              prompt += `\nStyle: iPhone selfie video look. Natural lighting. Slight grain, unfiltered.`;
               prompt += realismRules;
             } else {
-              // B/C-ROLL: outfit MUST match the scene context
-              const outfit = brollScene.outfit;
+              // ── B/C-ROLL: clone the original scene's action ──
+              // Determine appropriate outfit from the scene context
+              const outfit = origScene ? inferOutfitFromScene(clonedVisual) : fallbackScene.outfit;
 
-              // Character consistency: match the reference image person
-              const charMatch = `The person MUST be the EXACT same ${genderAdj} ${genderWord} shown in the first reference image. Same face, same facial features, same skin tone, same hair color and style. Do NOT change the person's gender or appearance.\n\n`;
-
+              prompt = `${charMatch}`;
               if (!isProductScene) {
-                prompt = `${charMatch}A ${genderAdj} ${genderWord} ${brollScene.img}. ${prompt}`;
-                prompt = prompt
-                  .replace(/holding.*?(product|package|pouch|bag|gummies|bottle|supplement)/gi, "")
-                  .replace(/with.*?(product|package|pouch|bag|gummies|bottle|supplement)/gi, "");
-                prompt += `\nNO product visible anywhere in this scene. Hands are occupied with the activity.`;
+                prompt += `A ${genderAdj} ${genderWord} performing the following action: ${clonedVisual}`;
+                prompt += `\n\nStoryboard direction: ${storyboardPrompt}`;
+                // Only strip product if original didn't have it
+                if (!origHasProduct) {
+                  prompt += `\nNO product visible in this scene.`;
+                }
               } else {
-                productSceneCount++;
-                prompt = `${charMatch}A ${genderAdj} ${genderWord} ${brollScene.img}. ${prompt}`;
-                prompt += `\nThe second reference image is the product. Product packaging must EXACTLY match that reference. Same colors, same logo, same design. Product rests naturally in the scene — NOT held up to camera, NOT spotlit. Product has the SAME lighting as the environment.`;
+                prompt += `A ${genderAdj} ${genderWord} performing the following action: ${clonedVisual}`;
+                prompt += `\n\nStoryboard direction: ${storyboardPrompt}`;
+                prompt += `\nPRODUCT IDENTITY (CRITICAL): The product in this scene must be an EXACT copy of the product shown in the second reference image. Copy EXACTLY: the packaging shape, colors, label design, logo, size, and proportions. Do NOT invent, redesign, or alter the product in any way. The product must look identical in EVERY scene — same object, same appearance, no variation.`;
               }
 
               prompt += `\nWearing: ${outfit}.`;
-              prompt += `\nCamera angle: ${cameraAngle}. Medium to wide shot (waist-up or full body). Camera is 4-6 feet away.`;
-              prompt += `\nBEHAVIOR: The ${genderWord} is MID-ACTION, captured candidly. NOT posing. NOT looking at camera. NOT smiling at camera. Eyes focused on the activity. Mouth closed, neutral relaxed expression. No exaggerated emotions.`;
-              prompt += `\nSTYLE: Candid lifestyle photography, NOT a photoshoot. Natural environment lighting. No studio setup. Slight motion blur acceptable.`;
+              prompt += `\nFraming: Medium to wide shot (waist-up or full body). Camera 4-6 feet away.`;
+              prompt += `\nBehavior: MID-ACTION, candid. NOT posing. NOT looking at camera. Eyes on activity. Mouth closed, neutral expression.`;
+              prompt += `\nStyle: Candid lifestyle. Natural environment lighting.`;
               prompt += realismRules;
             }
 
             // A-roll: ONLY creator ref (no product mixing — prevents model confusion)
             // B/C-roll with product: creator first (character), product second
             // B/C-roll without product: only creator
+            // ALWAYS pass product ref for product scenes so the model never fabricates
             const sceneCharUrl = creatorUrl;
-            const sceneProductUrl = (rollType !== "aroll" && isProductScene) ? productUrl : null;
+            const sceneProductUrl = isProductScene ? productUrl : null;
 
             // Try KIE (nano-banana-pro) first, fallback to Vidtory on failure
             let imageUrl: string;
@@ -952,43 +995,59 @@ export function useAutoGenerate() {
             const allowLipsync =
               rollType === "aroll" && scene.includeDialogueInPrompt;
 
-            // Gender enforcement in video prompt
+            // Gender enforcement
             const genderWord = detectedGender === "female" ? "woman" : detectedGender === "male" ? "man" : "person";
+
+            // ── ORIGINAL SCENE — clone the source video's action ──
+            const origScene = getOriginalScene(vidSceneIdx);
+            const fallbackScene = getBrollScene(vidSceneIdx);
+            const originalVisual = origScene?.visual || fallbackScene.img;
+
+            // Swap competitor references
+            let clonedAction = originalVisual
+              .replace(/\b(competitor|brand|their product|the product)\b/gi, "our product")
+              .replace(/\b(his|he|him|man|male|guy)\b/gi, detectedGender === "female" ? genderWord : "$&")
+              .replace(/\b(her|she|woman|female|girl)\b/gi, detectedGender === "male" ? genderWord : "$&");
 
             let prompt: string;
 
             if (rollType === "aroll") {
-              // A-ROLL VIDEO: speaking to camera, constant eye contact
+              // A-ROLL VIDEO: speaking to camera, clone original's energy
               prompt = `A ${genderWord} is speaking directly to the camera in a selfie-style video.`;
-              prompt += `\n\nEXACT MOTION SEQUENCE:`;
-              prompt += `\n1. The ${genderWord}'s eyes are locked on the camera lens the ENTIRE time. No looking away.`;
-              prompt += `\n2. Mouth opens and closes naturally as if speaking. Subtle jaw and lip movement.`;
-              prompt += `\n3. Small natural head micro-movements — tiny nods, slight tilts. Head stays mostly centered.`;
-              prompt += `\n4. One hand may gesture slightly below chin level. The other hand holds the phone/camera steady.`;
-              prompt += `\n5. Expression is engaged and natural — like talking to a friend on FaceTime. NOT a news anchor. NOT overly enthusiastic.`;
+              prompt += `\n\nCLONING ORIGINAL SCENE ACTION: "${clonedAction}"`;
+              prompt += `\nReplicate this exact scene with our ${genderWord} — same framing, same energy, same gestures.`;
+              prompt += `\n\nEXACT MOTION RULES:`;
+              prompt += `\n1. Eyes LOCKED on the camera lens the ENTIRE clip. Never looks away.`;
+              prompt += `\n2. Mouth opens and closes naturally as if speaking. Subtle lip movement.`;
+              prompt += `\n3. Small natural head micro-movements — tiny nods, slight tilts.`;
+              prompt += `\n4. Hands may gesture naturally below chin level.`;
+              prompt += `\n5. Expression: engaged and natural — like a FaceTime call, NOT a news anchor.`;
               if (allowLipsync) {
                 prompt += `\nDialogue: "${scene.voiceoverScript}"`;
               }
-              prompt += `\n\nOriginal scene direction: ${vpStr}`;
-              prompt += `\nShot on iPhone 15 Pro, selfie camera, portrait mode. Natural indoor/outdoor light. Slight grain, no color grade.`;
+              prompt += `\n\nStoryboard direction: ${vpStr}`;
+              prompt += `\nShot on iPhone 15 Pro, selfie camera. Natural light. Slight grain, no color grade.`;
               prompt += `\nAUDIO: Complete silence. No music. No sound effects.`;
             } else {
-              // B/C-ROLL VIDEO: highly specific motion so Kling doesn't guess
-              const brollScene = getBrollScene(vidSceneIdx);
-
-              prompt = `A ${genderWord} in a real environment. Camera is 4-6 feet away, medium-wide framing.`;
-              prompt += `\n\nEXACT MOTION SEQUENCE (5 seconds):`;
-              prompt += `\n${brollScene.video}`;
+              // B/C-ROLL VIDEO: clone original scene's specific action
+              prompt = `A ${genderWord} in a real environment. Camera 4-6 feet away, medium-wide.`;
+              prompt += `\n\nCLONING ORIGINAL SCENE ACTION (replicate this exactly in 5 seconds):`;
+              prompt += `\n"${clonedAction}"`;
+              prompt += `\nAdapt this with our ${genderWord} — same action, same movement, same camera angle.`;
+              // Add fallback motion detail if original description is too short
+              if (clonedAction.length < 60) {
+                prompt += `\nDetailed motion: ${fallbackScene.video}`;
+              }
+              prompt += `\n\nStoryboard direction: ${vpStr}`;
               prompt += `\n\nSTRICT RULES:`;
-              prompt += `\n- The ${genderWord} NEVER looks at the camera. Eyes stay on the activity at all times.`;
-              prompt += `\n- Mouth stays CLOSED the entire clip. No talking, no smile, no lip movement, no sighing.`;
-              prompt += `\n- NO deep breaths. NO shoulder raising. NO chest heaving. NO sighing motion.`;
-              prompt += `\n- NO lifting hands up for no reason. Every hand movement has a PURPOSE related to the activity.`;
-              prompt += `\n- Movement is SLOW and NATURAL. Real human speed, not sped up or exaggerated.`;
-              prompt += `\n- Face expression: neutral, focused on the task. NOT happy, NOT sad. Just doing their thing.`;
-              prompt += `\n\nOriginal scene direction: ${vpStr}`;
-              prompt += `\nPhotorealistic, shot on Sony A7IV, 85mm f/1.4. Natural ambient lighting. No studio lights. Slight color grade.`;
-              prompt += `\nAUDIO: Complete silence. No music. No sound effects.`;
+              prompt += `\n- ${genderWord} NEVER looks at the camera. Eyes on the activity.`;
+              prompt += `\n- Mouth CLOSED entire clip. No talking, no smile, no sighing.`;
+              prompt += `\n- NO deep breaths, NO shoulder raising, NO chest heaving.`;
+              prompt += `\n- Every hand movement has a PURPOSE. No random lifting.`;
+              prompt += `\n- Movement is SLOW and NATURAL. Real human speed.`;
+              prompt += `\n- Neutral focused expression. Not happy, not sad.`;
+              prompt += `\nPhotorealistic, Sony A7IV, 85mm f/1.4. Natural ambient light.`;
+              prompt += `\nAUDIO: Complete silence.`;
             }
 
             // Try KIE (kling-3.0) first, fallback to Vidtory on failure
