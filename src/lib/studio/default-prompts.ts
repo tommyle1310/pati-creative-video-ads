@@ -53,15 +53,37 @@ Create a NEW multi-scene script for a NEW product that CLONES the structure and 
 CRITICAL RULES:
 - You MUST output EXACTLY the same number of scenes as the original ad's sceneBreakdown.
 - Each scene in your output corresponds 1:1 to a scene in the original analysis.
-- **MATCH THE ORIGINAL'S WORD COUNT PER SCENE.** This is the most important rule:
-  - If the original scene has 0 words (silent B-Roll/C-Roll), your scene MUST also have 0 words — set dialogue to "" (empty string).
-  - If the original scene has 3-5 words (short hook), yours should have 3-8 words max.
-  - If the original scene has 10-20 words, yours should have a similar amount.
-  - NEVER inflate a short scene into a long one. Count the words in the original speech field and stay within ±30%.
+
+## DIALOGUE LENGTH — FILL THE SCENE DURATION
+This is the MOST IMPORTANT rule. The dialogue must fill the scene's duration naturally.
+- Speaking rate: ~2.5 words per second of scene duration.
+- A 4-second scene needs ~8-10 words. A 5-second scene needs ~10-13 words. A 2-second scene needs ~4-5 words.
+- Use the DURATION-BASED WORD TARGET provided per scene — this is your primary guide.
+- If the original scene had speech, your scene MUST have speech that fills the same duration. Do NOT write less words than the duration requires — the video generator will make the character sigh, pause, or mumble awkwardly to fill the remaining time.
+- If the original scene had 0 words (silent B-Roll/C-Roll), your scene MUST also have 0 words — set dialogue to "" (empty string).
+- NEVER leave a speaking scene half-empty. If a scene is 5 seconds, write 10-13 words of natural dialogue, not 3 words.
+- But also NEVER overstuff — don't write 25 words for a 3-second scene. Match the duration.
+
+## DIALOGUE QUALITY
+- Write like a REAL PERSON talking on camera — not a copywriter, not an AI.
+- Use contractions (I'm, don't, here's, that's), filler words sparingly (like, actually, honestly), sentence fragments, and natural speech rhythm.
+- Vary sentence length within a scene: mix a short punchy phrase with a longer explanatory one.
+- Avoid generic ad phrases like "game-changer", "you won't believe", "the secret is", "here's the thing" — real people don't talk like that on camera.
+- Each line should sound like something a real person would say in a selfie video, not a polished commercial voiceover.
+
+## DIRECTION QUALITY
+The "direction" field is critical — it directly drives video generation. It must be SPECIFIC and ACTIONABLE:
+- BAD (too vague): "Energetic and excited tone" / "Show the product" / "Casual setting"
+- GOOD: "Close-up selfie angle, speaker holds product at chin level in right hand, kitchen counter with morning coffee visible behind, natural window light from left, speaker's eyebrows raised mid-sentence then relaxes"
+- Include: exact camera framing (close-up/medium/wide), hand positions, specific background objects, lighting direction, facial micro-expressions, body language shifts during the scene
+- For B-Roll: describe exact hand-product interaction (which hand, grip type, motion path), surface/background, lighting mood
+- For C-Roll: describe the specific visual concept, animation behavior, color palette, what moves vs what stays still
+- Each direction should be 2-4 sentences with concrete visual details, NOT abstract mood words
+
+## SCENE STRUCTURE
 - Follow the same sequence of scene types (problem → product → benefit → CTA etc.)
 - Match the original's pacing and rhythm described in musicAndPacing.
 - Write for the NEW product, NEW audience, NEW big idea — not the original.
-- Make the script sound natural, conversational, and authentic (like a real person talking on camera).
 - Silent scenes (B-Roll product shots, C-Roll visuals) STAY SILENT — do not add voiceover where the original had none.
 
 ## META ADS AI STACK — CREATIVE STRATEGY CONTEXT
@@ -107,8 +129,8 @@ The overall narrative arc should follow the selected storyline:
 OUTPUT FORMAT:
 Return a JSON object with a "scenes" array. Each element has:
 - "sceneType": the marketing purpose (matching the original scene type)
-- "dialogue": the full voiceover/spoken text for that scene (2-4 sentences, detailed)
-- "direction": brief visual/tone note for the scene`,
+- "dialogue": the voiceover/spoken text that FILLS the scene duration naturally. Must sound like a real person talking, not a polished ad copy.
+- "direction": SPECIFIC visual direction with exact camera framing, hand positions, background objects, lighting, facial expressions, and body language. 2-4 sentences of concrete actionable detail.`,
   },
 
   storyboard: {

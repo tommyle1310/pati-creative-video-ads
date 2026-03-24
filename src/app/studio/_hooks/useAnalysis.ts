@@ -56,12 +56,23 @@ function extractFramesClientSide(
 
 /**
  * Extract audio from a video as base64-encoded WAV.
- * Uses Web Audio API to decode the video file's audio track.
+ * Accepts a File object OR a video URL (blob: or remote https:).
+ * Uses Web Audio API to decode the video's audio track.
  * Returns undefined if the video has no audio or extraction fails.
  */
-async function extractAudioBase64(videoFile: File): Promise<string | undefined> {
+async function extractAudioBase64(source: File | string): Promise<string | undefined> {
   try {
-    const arrayBuffer = await videoFile.arrayBuffer();
+    let arrayBuffer: ArrayBuffer;
+
+    if (source instanceof File) {
+      arrayBuffer = await source.arrayBuffer();
+    } else {
+      // Fetch from URL (blob: or remote)
+      const res = await fetch(source);
+      if (!res.ok) throw new Error(`Failed to fetch video: ${res.status}`);
+      arrayBuffer = await res.arrayBuffer();
+    }
+
     const audioCtx = new AudioContext({ sampleRate: 16000 }); // 16kHz mono for speech
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
     await audioCtx.close();
@@ -126,6 +137,7 @@ export function useAnalysis() {
 
   const extractFrames = useCallback(async () => {
     dispatch({ type: "SET_ANALYZING", v: true });
+    dispatch({ type: "SET_AUDIO_EXTRACTED", v: null });
 
     try {
       if (s.sourceType === "upload" && s.uploadedVideoUrl) {
@@ -137,12 +149,16 @@ export function useAnalysis() {
         dispatch({ type: "SET_FRAMES", frames: thumbs });
 
         // 2. Extract hi-res frames + audio client-side for analysis
+        // Use File object if available, otherwise fetch from URL (blob: or remote)
+        const audioSource = s.uploadedVideoFile || s.uploadedVideoUrl;
         const [hiResFrames, audioBase64] = await Promise.all([
           extractFramesHiRes(s.uploadedVideoUrl, 30),
-          s.uploadedVideoFile
-            ? extractAudioBase64(s.uploadedVideoFile)
+          audioSource
+            ? extractAudioBase64(audioSource)
             : Promise.resolve(undefined),
         ]);
+
+        dispatch({ type: "SET_AUDIO_EXTRACTED", v: !!audioBase64 });
 
         // 3. Check AI provider — if Claude, transcribe audio separately first
         //    This splits audio and frames into two requests to stay within Vercel's 4.5MB body limit

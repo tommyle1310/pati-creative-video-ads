@@ -1,5 +1,61 @@
 import type { JobStatusResponse } from "@/lib/studio/types";
 
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4MB — safely under Claude's 5MB limit
+
+/**
+ * Resize a base64 data-URL image so its raw base64 stays under 4MB.
+ * Uses client-side canvas. If already small enough, returns as-is.
+ */
+export function resizeImageForApi(
+  dataUrl: string,
+  maxBytes = MAX_IMAGE_BYTES
+): Promise<string> {
+  // Measure raw base64 size (strip the data:...;base64, prefix)
+  const commaIdx = dataUrl.indexOf(",");
+  const raw = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+  const byteSize = Math.ceil((raw.length * 3) / 4);
+  if (byteSize <= maxBytes) return Promise.resolve(dataUrl);
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      let quality = 0.8;
+
+      // Scale down progressively until under limit
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d")!;
+
+      const attempt = (): string => {
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        return canvas.toDataURL("image/jpeg", quality);
+      };
+
+      // First try: just re-encode at lower quality at original size
+      let result = attempt();
+      let resultSize = Math.ceil(((result.length - result.indexOf(",") - 1) * 3) / 4);
+
+      // Scale down if still too large
+      while (resultSize > maxBytes && (width > 200 || quality > 0.3)) {
+        if (quality > 0.4) {
+          quality -= 0.15;
+        } else {
+          width = Math.round(width * 0.7);
+          height = Math.round(height * 0.7);
+        }
+        result = attempt();
+        resultSize = Math.ceil(((result.length - result.indexOf(",") - 1) * 3) / 4);
+      }
+
+      resolve(result);
+    };
+    img.onerror = () => reject(new Error("Failed to load image for resize"));
+    img.src = dataUrl;
+  });
+}
+
 export function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

@@ -6,6 +6,65 @@ import type { VideoAnalysis, StoryboardScene, RollType } from "./types";
 import { createDefaultScene } from "./types";
 import fs from "fs";
 import path from "path";
+import sharp from "sharp";
+
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4MB (safe margin under 5MB API limit)
+
+/**
+ * Compress an image buffer to JPEG under MAX_IMAGE_BYTES.
+ * Progressively reduces resolution and quality until it fits.
+ */
+async function compressImage(buf: Buffer): Promise<Buffer> {
+  // Try quality steps first, then resize if still too large
+  const qualitySteps = [80, 60, 40];
+  const maxWidths = [1920, 1280, 800];
+
+  for (const maxWidth of maxWidths) {
+    for (const quality of qualitySteps) {
+      const result = await sharp(buf)
+        .resize({ width: maxWidth, withoutEnlargement: true })
+        .jpeg({ quality })
+        .toBuffer();
+      if (result.length <= MAX_IMAGE_BYTES) return result;
+    }
+  }
+
+  // Last resort: 640px at quality 30
+  return sharp(buf)
+    .resize({ width: 640, withoutEnlargement: true })
+    .jpeg({ quality: 30 })
+    .toBuffer();
+}
+
+/**
+ * Convert an image source (base64 data URL or remote URL) to a Gemini inlineData Part.
+ * For remote URLs, fetches the image and converts to base64.
+ * Automatically compresses images exceeding 4MB.
+ */
+async function imageToInlinePart(src: string): Promise<Part> {
+  let imgBuffer: Buffer;
+
+  if (src.startsWith("data:")) {
+    const b64 = src.split(",")[1];
+    imgBuffer = Buffer.from(b64, "base64");
+  } else {
+    const res = await fetch(src);
+    if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
+    imgBuffer = Buffer.from(await res.arrayBuffer());
+  }
+
+  // Compress if too large
+  if (imgBuffer.length > MAX_IMAGE_BYTES) {
+    imgBuffer = await compressImage(imgBuffer);
+  }
+
+  return {
+    inlineData: {
+      mimeType: "image/jpeg",
+      data: imgBuffer.toString("base64"),
+    },
+  };
+}
 
 function getClient() {
   let key = process.env.GEMINI_API_KEY;
@@ -103,15 +162,37 @@ Create a NEW multi-scene script for a NEW product that CLONES the structure and 
 CRITICAL RULES:
 - You MUST output EXACTLY the same number of scenes as the original ad's sceneBreakdown.
 - Each scene in your output corresponds 1:1 to a scene in the original analysis.
-- **MATCH THE ORIGINAL'S WORD COUNT PER SCENE.** This is the most important rule:
-  - If the original scene has 0 words (silent B-Roll/C-Roll), your scene MUST also have 0 words — set dialogue to "" (empty string).
-  - If the original scene has 3-5 words (short hook), yours should have 3-8 words max.
-  - If the original scene has 10-20 words, yours should have a similar amount.
-  - NEVER inflate a short scene into a long one. Count the words in the original speech field and stay within ±30%.
+
+## DIALOGUE LENGTH — FILL THE SCENE DURATION
+This is the MOST IMPORTANT rule. The dialogue must fill the scene's duration naturally.
+- Speaking rate: ~2.5 words per second of scene duration.
+- A 4-second scene needs ~8-10 words. A 5-second scene needs ~10-13 words. A 2-second scene needs ~4-5 words.
+- Use the DURATION-BASED WORD TARGET provided per scene — this is your primary guide.
+- If the original scene had speech, your scene MUST have speech that fills the same duration. Do NOT write less words than the duration requires — the video generator will make the character sigh, pause, or mumble awkwardly to fill the remaining time.
+- If the original scene had 0 words (silent B-Roll/C-Roll), your scene MUST also have 0 words — set dialogue to "" (empty string).
+- NEVER leave a speaking scene half-empty. If a scene is 5 seconds, write 10-13 words of natural dialogue, not 3 words.
+- But also NEVER overstuff — don't write 25 words for a 3-second scene. Match the duration.
+
+## DIALOGUE QUALITY
+- Write like a REAL PERSON talking on camera — not a copywriter, not an AI.
+- Use contractions (I'm, don't, here's, that's), filler words sparingly (like, actually, honestly), sentence fragments, and natural speech rhythm.
+- Vary sentence length within a scene: mix a short punchy phrase with a longer explanatory one.
+- Avoid generic ad phrases like "game-changer", "you won't believe", "the secret is", "here's the thing" — real people don't talk like that on camera.
+- Each line should sound like something a real person would say in a selfie video, not a polished commercial voiceover.
+
+## DIRECTION QUALITY
+The "direction" field is critical — it directly drives video generation. It must be SPECIFIC and ACTIONABLE:
+- BAD (too vague): "Energetic and excited tone" / "Show the product" / "Casual setting"
+- GOOD: "Close-up selfie angle, speaker holds product at chin level in right hand, kitchen counter with morning coffee visible behind, natural window light from left, speaker's eyebrows raised mid-sentence then relaxes"
+- Include: exact camera framing (close-up/medium/wide), hand positions, specific background objects, lighting direction, facial micro-expressions, body language shifts during the scene
+- For B-Roll: describe exact hand-product interaction (which hand, grip type, motion path), surface/background, lighting mood
+- For C-Roll: describe the specific visual concept, animation behavior, color palette, what moves vs what stays still
+- Each direction should be 2-4 sentences with concrete visual details, NOT abstract mood words
+
+## SCENE STRUCTURE
 - Follow the same sequence of scene types (problem → product → benefit → CTA etc.)
 - Match the original's pacing and rhythm described in musicAndPacing.
 - Write for the NEW product, NEW audience, NEW big idea — not the original.
-- Make the script sound natural, conversational, and authentic (like a real person talking on camera).
 - Silent scenes (B-Roll product shots, C-Roll visuals) STAY SILENT — do not add voiceover where the original had none.
 
 ## META ADS AI STACK — CREATIVE STRATEGY CONTEXT
@@ -157,8 +238,8 @@ The overall narrative arc should follow the selected storyline:
 OUTPUT FORMAT:
 Return a JSON object with a "scenes" array. Each element has:
 - "sceneType": the marketing purpose (matching the original scene type)
-- "dialogue": the full voiceover/spoken text for that scene (2-4 sentences, detailed)
-- "direction": brief visual/tone note for the scene`;
+- "dialogue": the voiceover/spoken text that FILLS the scene duration naturally. Must sound like a real person talking, not a polished ad copy.
+- "direction": SPECIFIC visual direction with exact camera framing, hand positions, background objects, lighting, facial expressions, and body language. 2-4 sentences of concrete actionable detail.`;
 
 const PROMPT_FRAMEWORK = `
 ## ROLL TYPE TAXONOMY
@@ -557,32 +638,51 @@ export async function generateClonedScript(
     ? `\n\n## CREATIVE STRATEGY (apply these across the entire script)\n${strategyLines.join("\n")}`
     : "";
 
-  // Calculate word counts per scene to guide Gemini
-  const sceneWordCounts = analysis.sceneBreakdown.map((sc) => {
-    // Strip "VO:" / "TEXT:" / "SUBTITLES:" prefixes and count real words
+  // Parse scene durations from time strings like "2.5s - 4.0s"
+  function parseDuration(timeStr: string): number {
+    const match = timeStr.match(/([\d.]+)\s*s?\s*[-–]\s*([\d.]+)\s*s?/);
+    if (match) return parseFloat(match[2]) - parseFloat(match[1]);
+    return 3; // fallback ~3 seconds
+  }
+
+  // Calculate word counts per scene — use DURATION-BASED targets
+  const sceneWordData = analysis.sceneBreakdown.map((sc) => {
     const speech = (sc.speech || "")
       .replace(/\b(VO|TEXT|SUBTITLES):\s*/gi, "")
       .replace(/\bNone\b/gi, "")
       .trim();
-    return speech ? speech.split(/\s+/).length : 0;
+    const originalWords = speech ? speech.split(/\s+/).length : 0;
+    const duration = parseDuration(sc.time);
+    // ~2.5 words per second for natural speaking pace
+    const durationTarget = originalWords === 0 ? 0 : Math.round(duration * 2.5);
+    // Use whichever is HIGHER: original word count or duration-based target
+    // This prevents under-filling scenes
+    const target = originalWords === 0 ? 0 : Math.max(originalWords, durationTarget);
+    return { originalWords, duration, durationTarget, target };
   });
-  const totalOriginalWords = sceneWordCounts.reduce((a, b) => a + b, 0);
 
   const wordCountGuide = analysis.sceneBreakdown
     .map((sc, i) => {
-      const wc = sceneWordCounts[i];
-      return `  Scene ${sc.scene_id}: ~${wc} words${wc === 0 ? " (SILENT — keep empty)" : ""}`;
+      const d = sceneWordData[i];
+      if (d.target === 0) {
+        return `  Scene ${sc.scene_id} (${d.duration.toFixed(1)}s): SILENT — dialogue must be "" (empty string)`;
+      }
+      return `  Scene ${sc.scene_id} (${d.duration.toFixed(1)}s): TARGET ~${d.target} words (must fill ${d.duration.toFixed(1)}s of speaking at ~2.5 words/sec)`;
     })
     .join("\n");
+
+  const totalTargetWords = sceneWordData.reduce((a, b) => a + b.target, 0);
 
   const promptText = `**Original Ad has ${analysis.sceneBreakdown.length} scenes. You MUST write exactly ${analysis.sceneBreakdown.length} scenes.**
 
 **Original Scene Breakdown:**
 ${sceneList}
 
-**Word Count Per Scene (MATCH CLOSELY — do NOT inflate):**
+**DURATION-BASED WORD TARGETS (PRIMARY GUIDE — dialogue must fill the scene duration):**
 ${wordCountGuide}
-Total original voiceover: ~${totalOriginalWords} words. Your script should be within ±30% of this total.
+Total target voiceover: ~${totalTargetWords} words.
+
+IMPORTANT: Each speaking scene's dialogue MUST contain enough words to fill its duration. A 5-second scene with only 3 words will cause the video character to sigh, pause awkwardly, or mumble — this ruins the ad. Write enough natural-sounding words to fill the time. Silent scenes must stay silent.
 
 **Music & Pacing:** ${analysis.musicAndPacing}
 
@@ -590,29 +690,18 @@ Total original voiceover: ~${totalOriginalWords} words. Your script should be wi
 **NEW Product Info:** ${productInfo || "Not provided."}
 **NEW Target Audience:** ${targetAudience || "Not provided."}${strategyBlock}
 
-Write a complete ${analysis.sceneBreakdown.length}-scene script. Match the original word count per scene — silent scenes stay silent, short hooks stay short.`;
+Write a complete ${analysis.sceneBreakdown.length}-scene script.
+- Speaking scenes: fill the duration with natural dialogue (use contractions, vary sentence lengths, sound like a real person)
+- Silent scenes: dialogue = "" (empty string)
+- Direction: write 2-4 sentences of SPECIFIC visual detail (camera framing, hand positions, background objects, facial expressions, lighting) — NOT vague mood words`;
 
   const parts: Part[] = [
     { text: promptText },
-    {
-      inlineData: {
-        mimeType: "image/jpeg",
-        data: productImage.includes(",")
-          ? productImage.split(",")[1]
-          : productImage,
-      },
-    },
+    await imageToInlinePart(productImage),
   ];
 
   if (creatorImage) {
-    parts.push({
-      inlineData: {
-        mimeType: "image/jpeg",
-        data: creatorImage.includes(",")
-          ? creatorImage.split(",")[1]
-          : creatorImage,
-      },
-    });
+    parts.push(await imageToInlinePart(creatorImage));
   }
 
   return callWithRetry(async (model) => {
@@ -631,8 +720,8 @@ Write a complete ${analysis.sceneBreakdown.length}-scene script. Match the origi
                 type: "OBJECT",
                 properties: {
                   sceneType: { type: "STRING", description: "Marketing purpose (problem, product, benefit, CTA, etc.)" },
-                  dialogue: { type: "STRING", description: "Voiceover/spoken text for this scene. Match the original word count. Empty string for silent scenes." },
-                  direction: { type: "STRING", description: "Brief visual/tone direction note" },
+                  dialogue: { type: "STRING", description: "Voiceover text that fills the scene duration naturally (~2.5 words/sec). Must sound like a real person talking. Empty string for silent scenes." },
+                  direction: { type: "STRING", description: "2-4 sentences of SPECIFIC visual direction: exact camera framing (close-up/medium/wide), hand positions and gestures, named background objects, lighting direction, facial micro-expressions, body language. No vague mood words." },
                 },
                 required: ["sceneType", "dialogue", "direction"],
               },
@@ -672,25 +761,11 @@ export async function generateClonedStoryboard(
 
   const parts: Part[] = [
     { text: promptText },
-    {
-      inlineData: {
-        mimeType: "image/jpeg",
-        data: productImage.includes(",")
-          ? productImage.split(",")[1]
-          : productImage,
-      },
-    },
+    await imageToInlinePart(productImage),
   ];
 
   if (creatorImage) {
-    parts.push({
-      inlineData: {
-        mimeType: "image/jpeg",
-        data: creatorImage.includes(",")
-          ? creatorImage.split(",")[1]
-          : creatorImage,
-      },
-    });
+    parts.push(await imageToInlinePart(creatorImage));
   }
 
   // For many scenes, tell Gemini to keep prompts concise to avoid output truncation
@@ -837,24 +912,10 @@ export async function enhancePrompt(
   const parts: Part[] = [{ text: textPrompt }];
 
   if (productImage) {
-    parts.push({
-      inlineData: {
-        mimeType: "image/jpeg",
-        data: productImage.includes(",")
-          ? productImage.split(",")[1]
-          : productImage,
-      },
-    });
+    parts.push(await imageToInlinePart(productImage));
   }
   if (creatorImage) {
-    parts.push({
-      inlineData: {
-        mimeType: "image/jpeg",
-        data: creatorImage.includes(",")
-          ? creatorImage.split(",")[1]
-          : creatorImage,
-      },
-    });
+    parts.push(await imageToInlinePart(creatorImage));
   }
 
   return callWithRetry(async (model) => {

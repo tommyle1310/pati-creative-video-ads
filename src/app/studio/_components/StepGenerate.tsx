@@ -100,8 +100,8 @@ export function StepGenerate() {
               }
               className="bg-background border border-border rounded px-2 py-1.5 text-sm"
             >
+              <option value="kie">KIE (Nano Banana Pro)</option>
               <option value="vidtory">Vidtory</option>
-              <option value="kling-3.0">Kling 3.0 (KIE)</option>
             </select>
           </div>
           <div className="flex flex-col gap-1">
@@ -119,8 +119,8 @@ export function StepGenerate() {
               }
               className="bg-background border border-border rounded px-2 py-1.5 text-sm"
             >
+              <option value="kie">KIE (Kling 3.0)</option>
               <option value="vidtory">Vidtory</option>
-              <option value="kling-3.0">Kling 3.0 (KIE)</option>
             </select>
           </div>
           <VoicePicker />
@@ -377,13 +377,13 @@ export function StepGenerate() {
                           <ImageIcon size={14} /> Images
                           <span
                             className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
-                              s.imageModel === "kling-3.0"
+                              s.imageModel === "kie"
                                 ? "bg-orange-500/20 text-orange-400"
                                 : "bg-cyan-500/20 text-cyan-400"
                             }`}
                           >
-                            {s.imageModel === "kling-3.0"
-                              ? "Kling 3.0"
+                            {s.imageModel === "kie"
+                              ? "Nano Banana Pro"
                               : "Vidtory"}
                           </span>
                         </span>
@@ -501,12 +501,12 @@ export function StepGenerate() {
                           <Video size={14} /> Videos
                           <span
                             className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
-                              s.videoModel === "kling-3.0"
+                              s.videoModel === "kie"
                                 ? "bg-orange-500/20 text-orange-400"
                                 : "bg-cyan-500/20 text-cyan-400"
                             }`}
                           >
-                            {s.videoModel === "kling-3.0"
+                            {s.videoModel === "kie"
                               ? "Kling 3.0"
                               : "Vidtory"}
                           </span>

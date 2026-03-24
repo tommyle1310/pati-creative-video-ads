@@ -25,9 +25,26 @@ function base64ToBlob(dataUrl: string): Blob {
   return new Blob([bytes], { type: mime });
 }
 
+/**
+ * Upload media to Vidtory. Accepts base64 data URLs OR remote URLs.
+ * Remote URLs are fetched first and re-uploaded as blobs.
+ */
 export async function uploadMedia(dataUrl: string): Promise<string> {
   const apiKey = getApiKey();
-  const blob = base64ToBlob(dataUrl);
+  let blob: Blob;
+
+  if (dataUrl.startsWith("data:")) {
+    // Base64 data URL
+    blob = base64ToBlob(dataUrl);
+  } else {
+    // Remote URL — fetch and convert to blob
+    const fetchRes = await fetch(dataUrl);
+    if (!fetchRes.ok) throw new Error(`Failed to fetch image: ${fetchRes.status}`);
+    const arrayBuf = await fetchRes.arrayBuffer();
+    const contentType = fetchRes.headers.get("content-type") || "image/jpeg";
+    blob = new Blob([arrayBuf], { type: contentType });
+  }
+
   const form = new FormData();
   form.append("file", blob, "upload.jpg");
 

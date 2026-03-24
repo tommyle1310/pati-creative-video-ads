@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Clapperboard, ArrowLeft } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Clapperboard, ArrowLeft, Zap, SlidersHorizontal } from "lucide-react";
 import { StudioProvider, useStudio } from "./_state/context";
 import { StepIndicator } from "./_components/StepIndicator";
 import { StepSource } from "./_components/StepSource";
@@ -15,21 +15,36 @@ import { NavigationButtons } from "./_components/NavigationButtons";
 import { SaveProjectButton } from "./_components/SaveProjectButton";
 import { StudioInfoDialog } from "./_components/StudioInfoDialog";
 import { StudioDashboard } from "./_components/StudioDashboard";
+import { AutoModePanel } from "./_components/AutoModePanel";
 import { AnnouncementDialog } from "../components/AnnouncementDialog";
+
+type StudioMode = "auto" | "manual";
 
 function StudioContent() {
   const { s } = useStudio();
-  // null = auto-detect, true = forced wizard, false = forced dashboard
+  // null = not yet determined, true = forced wizard, false = forced dashboard
   const [showWizard, setShowWizard] = useState<boolean | null>(null);
+  const [studioMode, setStudioMode] = useState<StudioMode>("auto");
+  const [mounted, setMounted] = useState(false);
 
-  // If user has an active project in progress, default to wizard
+  // Defer auto-detection to client-side to avoid hydration mismatch
+  // (server has no sessionStorage state, client may hydrate active work)
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const hasActiveWork =
     s.currentProjectId ||
     s.sourceType ||
     s.analysis ||
     s.scriptScenes.length > 0;
 
-  const wizardActive = showWizard === null ? !!hasActiveWork : showWizard;
+  // Before mount: always render dashboard (matches server). After mount: auto-detect.
+  const wizardActive = !mounted
+    ? false
+    : showWizard === null
+      ? !!hasActiveWork
+      : showWizard;
 
   return (
     <div className="min-h-screen p-6 space-y-6">
@@ -51,6 +66,35 @@ function StudioContent() {
           Clone &amp; Improve
         </span>
         <StudioInfoDialog />
+
+        {/* Auto / Manual toggle */}
+        {wizardActive && (
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 ml-4">
+            <button
+              onClick={() => setStudioMode("auto")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                studioMode === "auto"
+                  ? "bg-gradient-to-r from-emerald-600 to-blue-600 text-white shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Zap size={12} />
+              Auto
+            </button>
+            <button
+              onClick={() => setStudioMode("manual")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                studioMode === "manual"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <SlidersHorizontal size={12} />
+              Manual
+            </button>
+          </div>
+        )}
+
         {wizardActive && (
           <div className="ml-auto">
             <SaveProjectButton />
@@ -59,24 +103,32 @@ function StudioContent() {
       </div>
 
       {wizardActive ? (
-        <>
-          {/* Step indicator */}
-          <StepIndicator />
-
-          {/* Step content */}
+        studioMode === "auto" ? (
+          /* Auto mode — single-panel automation */
           <div className="bg-card border border-border rounded-lg p-6 min-h-[400px]">
-            {s.step === 1 && <StepSource />}
-            {s.step === 2 && <StepAnalyze />}
-            {s.step === 3 && <StepProduct />}
-            {s.step === 4 && <StepScript />}
-            {s.step === 5 && <StepStoryboard />}
-            {s.step === 6 && <StepGenerate />}
-            {s.step === 7 && <StepPreview />}
+            <AutoModePanel />
           </div>
+        ) : (
+          /* Manual mode — original 7-step wizard */
+          <>
+            {/* Step indicator */}
+            <StepIndicator />
 
-          {/* Navigation buttons */}
-          <NavigationButtons />
-        </>
+            {/* Step content */}
+            <div className="bg-card border border-border rounded-lg p-6 min-h-[400px]">
+              {s.step === 1 && <StepSource />}
+              {s.step === 2 && <StepAnalyze />}
+              {s.step === 3 && <StepProduct />}
+              {s.step === 4 && <StepScript />}
+              {s.step === 5 && <StepStoryboard />}
+              {s.step === 6 && <StepGenerate />}
+              {s.step === 7 && <StepPreview />}
+            </div>
+
+            {/* Navigation buttons */}
+            <NavigationButtons />
+          </>
+        )
       ) : (
         <StudioDashboard onStart={() => setShowWizard(true)} />
       )}

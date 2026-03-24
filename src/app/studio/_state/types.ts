@@ -8,7 +8,7 @@ export type { VideoAnalysis, StoryboardScene, ScriptScene };
 
 // ── State ────────────────────────────────────────────────────
 
-export type VideoModel = "vidtory" | "kling-3.0";
+export type VideoModel = "vidtory" | "kie" | "kling-3.0";
 
 export interface StudioState {
   step: number;
@@ -26,6 +26,7 @@ export interface StudioState {
   analysis: VideoAnalysis | null;
   isAnalyzing: boolean;
   analyzeError: string | null;
+  audioExtracted: boolean | null; // null = not attempted, true/false = result
   // Step 3
   productImage: string | null;
   productImages: string[];
@@ -71,6 +72,7 @@ export type Action =
   | { type: "SET_ANALYSIS"; analysis: VideoAnalysis }
   | { type: "SET_ANALYZING"; v: boolean }
   | { type: "SET_ANALYZE_ERROR"; error: string | null }
+  | { type: "SET_AUDIO_EXTRACTED"; v: boolean | null }
   | { type: "SET_PRODUCT_IMAGE"; data: string }
   | { type: "ADD_PRODUCT_IMAGES"; images: string[] }
   | { type: "REMOVE_PRODUCT_IMAGE"; index: number }

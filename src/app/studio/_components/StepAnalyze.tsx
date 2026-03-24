@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Loader2, Sparkles, RotateCcw, FileText, ChevronDown, ChevronRight } from "lucide-react";
+import { Loader2, Sparkles, RotateCcw, FileText, ChevronDown, ChevronRight, Volume2, VolumeX } from "lucide-react";
 import { useStudio } from "../_state/context";
 import { useAnalysis } from "../_hooks/useAnalysis";
 import { AnalysisSkeleton } from "./SkeletonPanels";
@@ -205,6 +205,29 @@ export function StepAnalyze() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Audio extraction status */}
+      {framesExist && s.audioExtracted !== null && (
+        <div
+          className={`flex items-center gap-2 text-xs px-3 py-2 rounded-md border ${
+            s.audioExtracted
+              ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-400"
+              : "bg-amber-500/5 border-amber-500/20 text-amber-400"
+          }`}
+        >
+          {s.audioExtracted ? (
+            <>
+              <Volume2 size={14} />
+              Audio extracted — voiceover will be transcribed from the actual audio track
+            </>
+          ) : (
+            <>
+              <VolumeX size={14} />
+              No audio extracted — speech will be guessed from visual text overlays only (less accurate)
+            </>
+          )}
         </div>
       )}
 

@@ -2,6 +2,7 @@
 
 import { useCallback } from "react";
 import { useStudio } from "../_state/context";
+import { resizeImageForApi } from "../_utils/helpers";
 
 export function useScriptGeneration() {
   const { s, dispatch } = useStudio();
@@ -9,16 +10,22 @@ export function useScriptGeneration() {
   const handleGenerateScript = useCallback(async () => {
     dispatch({ type: "SET_GENERATING_SCRIPT", v: true });
     try {
+      // Resize images to stay under Claude's 5MB per-image limit
+      const [productImage, creatorImage] = await Promise.all([
+        s.productImage ? resizeImageForApi(s.productImage) : Promise.resolve(null),
+        s.creatorImage ? resizeImageForApi(s.creatorImage) : Promise.resolve(null),
+      ]);
+
       const res = await fetch("/api/studio/script", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           analysis: s.analysis,
           bigIdea: s.bigIdea,
-          productImage: s.productImage,
+          productImage,
           productInfo: s.productInfo,
           targetAudience: s.targetAudience,
-          creatorImage: s.creatorImage,
+          creatorImage,
           motivator: s.motivator,
           emotionalTone: s.emotionalTone,
           storylineType: s.storylineType,

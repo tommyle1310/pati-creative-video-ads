@@ -106,10 +106,21 @@ interface BrandProduct {
   targetAudience: string | null;
 }
 
+interface BrandCharacter {
+  id: string;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  voiceId: string | null;
+  voiceSource: string | null;
+  voiceName: string | null;
+}
+
 interface BrandOption {
   id: string;
   name: string;
   products: BrandProduct[];
+  characters: BrandCharacter[];
 }
 
 // ── Analysis field display ──
@@ -138,10 +149,11 @@ export function StepProduct() {
   const detected = useDetectedStrategy(adAnalysis);
   const [showAnalysisRef, setShowAnalysisRef] = useState(true);
 
-  // Brand/product auto-fill
+  // Brand/product/character auto-fill
   const [brands, setBrands] = useState<BrandOption[]>([]);
   const [selectedBrandId, setSelectedBrandId] = useState("");
   const [selectedProductId, setSelectedProductId] = useState("");
+  const [selectedCharacterId, setSelectedCharacterId] = useState("");
 
   // Auto-populate URLs from saved product profiles on mount
   useEffect(() => { loadSavedProfileUrls(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -169,19 +181,40 @@ export function StepProduct() {
   const selectedProduct = selectedBrand?.products.find(
     (p) => p.id === selectedProductId
   );
+  const selectedCharacter = selectedBrand?.characters.find(
+    (c) => c.id === selectedCharacterId
+  );
 
   const handleAutoFill = () => {
-    if (!selectedProduct) return;
-    if (selectedProduct.bigIdea)
-      dispatch({ type: "SET_FIELD", field: "bigIdea", value: selectedProduct.bigIdea });
-    if (selectedProduct.productInfo)
-      dispatch({ type: "SET_FIELD", field: "productInfo", value: selectedProduct.productInfo });
-    if (selectedProduct.targetAudience)
-      dispatch({ type: "SET_FIELD", field: "targetAudience", value: selectedProduct.targetAudience });
-    if (selectedProduct.landingPageUrls?.length)
-      dispatch({ type: "SET_FIELD", field: "landingPageUrls", value: selectedProduct.landingPageUrls });
-    if (selectedProduct.images?.length && selectedProduct.images[0])
-      dispatch({ type: "SET_PRODUCT_IMAGE", data: selectedProduct.images[0] });
+    // Auto-fill product fields
+    if (selectedProduct) {
+      if (selectedProduct.bigIdea)
+        dispatch({ type: "SET_FIELD", field: "bigIdea", value: selectedProduct.bigIdea });
+      if (selectedProduct.productInfo)
+        dispatch({ type: "SET_FIELD", field: "productInfo", value: selectedProduct.productInfo });
+      if (selectedProduct.targetAudience)
+        dispatch({ type: "SET_FIELD", field: "targetAudience", value: selectedProduct.targetAudience });
+      if (selectedProduct.landingPageUrls?.length)
+        dispatch({ type: "SET_FIELD", field: "landingPageUrls", value: selectedProduct.landingPageUrls });
+      if (selectedProduct.images?.length && selectedProduct.images[0])
+        dispatch({ type: "SET_PRODUCT_IMAGE", data: selectedProduct.images[0] });
+    }
+
+    // Auto-fill character/creator
+    if (selectedCharacter) {
+      if (selectedCharacter.imageUrl) {
+        dispatch({ type: "SET_CREATOR_IMAGE", data: selectedCharacter.imageUrl });
+      }
+      if (selectedCharacter.voiceId) {
+        dispatch({ type: "SET_FIELD", field: "voice", value: selectedCharacter.voiceId });
+      }
+      if (selectedCharacter.voiceSource) {
+        dispatch({ type: "SET_FIELD", field: "voiceSource", value: selectedCharacter.voiceSource });
+      }
+      if (selectedCharacter.voiceName) {
+        dispatch({ type: "SET_FIELD", field: "voiceName", value: selectedCharacter.voiceName });
+      }
+    }
   };
 
   const handleMultiImageUpload = useCallback(
@@ -220,6 +253,7 @@ export function StepProduct() {
                 onChange={(e) => {
                   setSelectedBrandId(e.target.value);
                   setSelectedProductId("");
+                  setSelectedCharacterId("");
                 }}
                 className="flex-1 bg-background border border-border rounded px-3 py-1.5 text-sm"
               >
@@ -244,16 +278,55 @@ export function StepProduct() {
                   ))}
                 </select>
               )}
+              {selectedBrand && selectedBrand.characters.length > 0 && (
+                <select
+                  value={selectedCharacterId}
+                  onChange={(e) => setSelectedCharacterId(e.target.value)}
+                  className="flex-1 bg-background border border-border rounded px-3 py-1.5 text-sm"
+                >
+                  <option value="">Select character...</option>
+                  {selectedBrand.characters.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
           <button
             onClick={handleAutoFill}
-            disabled={!selectedProduct}
+            disabled={!selectedProduct && !selectedCharacter}
             className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-1.5 rounded-md text-xs font-medium shrink-0"
           >
             <Sparkles size={12} />
             Auto-fill
           </button>
+        </div>
+      )}
+
+      {/* Selected character preview */}
+      {selectedCharacter && (
+        <div className="flex items-center gap-3 p-3 rounded-lg border border-violet-500/20 bg-violet-500/5">
+          {selectedCharacter.imageUrl && (
+            <img
+              src={selectedCharacter.imageUrl}
+              alt={selectedCharacter.name}
+              className="h-14 w-14 rounded-lg object-cover border border-violet-500/30"
+            />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-violet-300">{selectedCharacter.name}</p>
+            {selectedCharacter.description && (
+              <p className="text-xs text-muted-foreground truncate">{selectedCharacter.description}</p>
+            )}
+            {selectedCharacter.voiceName && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Voice: {selectedCharacter.voiceName}
+                {selectedCharacter.voiceSource && ` (${selectedCharacter.voiceSource})`}
+              </p>
+            )}
+          </div>
         </div>
       )}
 

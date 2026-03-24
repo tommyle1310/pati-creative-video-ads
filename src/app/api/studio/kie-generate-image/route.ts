@@ -3,7 +3,7 @@ import { generateImageKie } from "@/lib/studio/kie";
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, aspectRatio, characterUrl } = await req.json();
+    const { prompt, aspectRatio, characterUrl, productUrl } = await req.json();
 
     if (!prompt) {
       return NextResponse.json(
@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
         const taskId = await generateImageKie(
           prompt,
           aspectRatio || "9:16",
-          characterUrl || undefined
+          characterUrl || undefined,
+          productUrl || undefined
         );
         return NextResponse.json({ jobId: taskId });
       } catch (err: unknown) {

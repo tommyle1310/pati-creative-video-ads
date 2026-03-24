@@ -40,6 +40,8 @@ export function reducer(state: StudioState, action: Action): StudioState {
       };
     case "SET_ANALYZE_ERROR":
       return { ...state, analyzeError: action.error, isAnalyzing: false };
+    case "SET_AUDIO_EXTRACTED":
+      return { ...state, audioExtracted: action.v };
     case "SET_PRODUCT_IMAGE": {
       // Set as primary; also add to gallery if not already there
       const pImgs = action.data && !state.productImages.includes(action.data)

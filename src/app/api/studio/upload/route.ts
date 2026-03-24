@@ -17,12 +17,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ url });
     }
 
-    // Legacy JSON with dataUrl (for small files like images)
-    const { dataUrl } = await req.json();
-    if (!dataUrl) {
-      return NextResponse.json({ error: "Missing dataUrl" }, { status: 400 });
+    // JSON upload — accepts dataUrl (base64) or url (remote)
+    const body = await req.json();
+    const mediaInput = body.dataUrl || body.url;
+    if (!mediaInput) {
+      return NextResponse.json({ error: "Missing dataUrl or url" }, { status: 400 });
     }
-    const url = await uploadMedia(dataUrl);
+    const url = await uploadMedia(mediaInput);
     return NextResponse.json({ url });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Upload failed";

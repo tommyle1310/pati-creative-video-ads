@@ -55,7 +55,9 @@
       "Bash(npx shadcn@latest add popover --yes)",
       "Bash(find /d/jobs/pati/creative-project/src/app/studio/_state -type f -name *.ts -o -name *.tsx)",
       "Bash(xargs grep:*)",
-      "Bash(find d:/jobs/pati/creative-project/src/app/api/studio -type f -name *.ts)"
+      "Bash(find d:/jobs/pati/creative-project/src/app/api/studio -type f -name *.ts)",
+      "Bash(node -e \"try { require\\(''sharp''\\); console.log\\(''sharp available''\\); } catch { console.log\\(''sharp NOT available''\\); }\")",
+      "WebFetch(domain:kie.ai)"
     ]
   }
 }

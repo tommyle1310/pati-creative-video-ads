@@ -9,31 +9,34 @@ function getApiKey() {
   return key;
 }
 
-// ── Image Generation ─────────────────────────────────────────
+// ── Image Generation (Nano Banana Pro) ───────────────────────
 
 export async function generateImageKie(
   prompt: string,
   aspectRatio: string,
-  characterUrl?: string
+  characterUrl?: string,
+  productUrl?: string
 ): Promise<string> {
   const apiKey = getApiKey();
 
   const input: Record<string, unknown> = {
     prompt,
     aspect_ratio: aspectRatio,
-    n: 1,
+    resolution: "1K",
+    output_format: "png",
   };
 
-  if (characterUrl) {
-    input.image_reference = {
-      type: "subject",
-      image_urls: [characterUrl],
-      weight: 0.6,
-    };
+  // Nano Banana Pro uses image_input array for reference images
+  // Pass both character + product refs so the model can match them
+  const imageRefs: string[] = [];
+  if (characterUrl) imageRefs.push(characterUrl);
+  if (productUrl) imageRefs.push(productUrl);
+  if (imageRefs.length > 0) {
+    input.image_input = imageRefs;
   }
 
   const body = {
-    model: "kling-3.0/image",
+    model: "nano-banana-pro",
     input,
   };
 

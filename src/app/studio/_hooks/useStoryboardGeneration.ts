@@ -2,6 +2,7 @@
 
 import { useCallback } from "react";
 import { useStudio } from "../_state/context";
+import { resizeImageForApi } from "../_utils/helpers";
 
 export function useStoryboardGeneration() {
   const { s, dispatch } = useStudio();
@@ -9,6 +10,12 @@ export function useStoryboardGeneration() {
   const handleGenerateStoryboard = useCallback(async () => {
     dispatch({ type: "SET_GENERATING_STORYBOARD", v: true });
     try {
+      // Resize images to stay under Claude's 5MB per-image limit
+      const [productImage, creatorImage] = await Promise.all([
+        s.productImage ? resizeImageForApi(s.productImage) : Promise.resolve(null),
+        s.creatorImage ? resizeImageForApi(s.creatorImage) : Promise.resolve(null),
+      ]);
+
       const res = await fetch("/api/studio/storyboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -17,10 +24,10 @@ export function useStoryboardGeneration() {
           script: s.scriptScenes
             .map((sc, i) => `Scene ${i + 1} [${sc.sceneType}]: ${sc.dialogue}`)
             .join("\n"),
-          productImage: s.productImage,
+          productImage,
           productInfo: s.productInfo,
           targetAudience: s.targetAudience,
-          creatorImage: s.creatorImage,
+          creatorImage,
           motivator: s.motivator,
           emotionalTone: s.emotionalTone,
           storylineType: s.storylineType,

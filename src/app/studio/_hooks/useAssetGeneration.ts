@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 import { useStudio } from "../_state/context";
-import { pollJob, pollKieJob, pcmToWav } from "../_utils/helpers";
+import { pollJob, pollKieJob, pcmToWav, resizeImageForApi } from "../_utils/helpers";
 
 export function useAssetGeneration() {
   const { s, dispatch } = useStudio();
@@ -72,7 +72,7 @@ export function useAssetGeneration() {
         if (scene.imageCameraAngle)
           prompt = `${scene.imageCameraAngle} shot. ${prompt}`;
 
-        const useKie = s.imageModel === "kling-3.0";
+        const useKie = s.imageModel === "kie";
         const endpoint = useKie
           ? "/api/studio/kie-generate-image"
           : "/api/studio/generate-image";
@@ -233,7 +233,7 @@ export function useAssetGeneration() {
           audioPromise = handleGenerateAudio(sceneId);
         }
 
-        const useKie = s.videoModel === "kling-3.0";
+        const useKie = s.videoModel === "kie";
         const endpoint = useKie
           ? "/api/studio/kie-generate-video"
           : "/api/studio/generate-video";
@@ -344,8 +344,8 @@ export function useAssetGeneration() {
             projectContext: `Product: ${s.productInfo}\nAudience: ${s.targetAudience}\nBig Idea: ${s.bigIdea}${s.motivator ? `\nMotivator: ${s.motivator}` : ""}${s.emotionalTone ? `\nEmotional Tone: ${s.emotionalTone}` : ""}${s.storylineType ? `\nStoryline: ${s.storylineType}` : ""}`,
             scene,
             promptType,
-            productImage: s.productImage,
-            creatorImage: s.creatorImage,
+            productImage: s.productImage ? await resizeImageForApi(s.productImage) : undefined,
+            creatorImage: s.creatorImage ? await resizeImageForApi(s.creatorImage) : undefined,
             rollType: scene.rollType || undefined,
           }),
         });
