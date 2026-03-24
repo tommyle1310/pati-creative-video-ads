@@ -22,6 +22,13 @@ import { useAutoGenerate, type AutoPhase } from "../_hooks/useAutoGenerate";
 import { fileToBase64 } from "../_utils/helpers";
 import { PreviewModal } from "./PreviewModal";
 import { VoicePicker } from "./VoicePicker";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
 
 // ── Brand/Product/Character types (same as StepProduct) ──
 
@@ -650,50 +657,62 @@ export function AutoModePanel() {
               <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                 Aspect Ratio
               </label>
-              <select
+              <Select
                 value={s.aspectRatio}
-                onChange={(e) =>
-                  dispatch({ type: "SET_FIELD", field: "aspectRatio", value: e.target.value })
+                onValueChange={(v) =>
+                  dispatch({ type: "SET_FIELD", field: "aspectRatio", value: v })
                 }
                 disabled={isRunning}
-                className="bg-background border border-border rounded px-2 py-1.5 text-sm"
               >
-                <option value="9:16">9:16</option>
-                <option value="16:9">16:9</option>
-                <option value="1:1">1:1</option>
-              </select>
+                <SelectTrigger className="w-[90px] h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="9:16">9:16</SelectItem>
+                  <SelectItem value="16:9">16:9</SelectItem>
+                  <SelectItem value="1:1">1:1</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                 Image Model
               </label>
-              <select
+              <Select
                 value={s.imageModel}
-                onChange={(e) =>
-                  dispatch({ type: "SET_FIELD", field: "imageModel", value: e.target.value })
+                onValueChange={(v) =>
+                  dispatch({ type: "SET_FIELD", field: "imageModel", value: v })
                 }
                 disabled={isRunning}
-                className="bg-background border border-border rounded px-2 py-1.5 text-sm"
               >
-                <option value="kie">KIE (Nano Banana Pro)</option>
-                <option value="vidtory">Vidtory</option>
-              </select>
+                <SelectTrigger className="w-[180px] h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kie">KIE — Nano Banana Pro</SelectItem>
+                  <SelectItem value="vidtory">Vidtory</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                 Video Model
               </label>
-              <select
+              <Select
                 value={s.videoModel}
-                onChange={(e) =>
-                  dispatch({ type: "SET_FIELD", field: "videoModel", value: e.target.value })
+                onValueChange={(v) =>
+                  dispatch({ type: "SET_FIELD", field: "videoModel", value: v })
                 }
                 disabled={isRunning}
-                className="bg-background border border-border rounded px-2 py-1.5 text-sm"
               >
-                <option value="kie">KIE (Kling 3.0)</option>
-                <option value="vidtory">Vidtory</option>
-              </select>
+                <SelectTrigger className="w-[160px] h-9 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kie">KIE — Kling 3.0</SelectItem>
+                  <SelectItem value="vidtory">Vidtory</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <VoicePicker />
           </div>

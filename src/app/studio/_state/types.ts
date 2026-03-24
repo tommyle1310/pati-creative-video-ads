@@ -59,6 +59,10 @@ export interface StudioState {
   // uploaded vidtory URLs (cached so we don't re-upload)
   productVidtoryUrl: string | null;
   creatorVidtoryUrl: string | null;
+  // Auto-generate state (persisted so it survives sidebar navigation)
+  autoPhase: string; // AutoPhase type from useAutoGenerate
+  autoDetail: string;
+  autoError: string | null;
   // Project persistence
   currentProjectId: string | null;
   currentProjectName: string | null;
@@ -92,4 +96,5 @@ export type Action =
   | { type: "LOAD_PROJECT"; state: Partial<StudioState> }
   | { type: "RESET_PROGRESS" }
   | { type: "CLEAR_SOURCE" }
-  | { type: "SET_PROJECT_META"; id: string | null; name: string | null };
+  | { type: "SET_PROJECT_META"; id: string | null; name: string | null }
+  | { type: "SET_AUTO_PHASE"; phase: string; detail?: string; error?: string | null };

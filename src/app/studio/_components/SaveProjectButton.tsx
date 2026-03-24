@@ -218,7 +218,7 @@ export function SaveProjectButton() {
                   className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
                 >
                   <Save size={14} />
-                  Duplicate with a copy
+                  Duplicate
                 </button>
               </TooltipTrigger>
               <TooltipContent>

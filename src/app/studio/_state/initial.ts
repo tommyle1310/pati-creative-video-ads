@@ -41,6 +41,9 @@ export const initialState: StudioState = {
   videoModel: "kie",
   productVidtoryUrl: null,
   creatorVidtoryUrl: null,
+  autoPhase: "idle",
+  autoDetail: "",
+  autoError: null,
   currentProjectId: null,
   currentProjectName: null,
 };

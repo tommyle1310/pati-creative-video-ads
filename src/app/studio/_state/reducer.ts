@@ -141,7 +141,10 @@ export function reducer(state: StudioState, action: Action): StudioState {
         Object.entries(action.state).filter(([, v]) => v !== undefined)
       );
       const loaded = { ...initialState, ...cleaned };
-      return { ...loaded, maxStepReached: loaded.step };
+      return {
+        ...loaded,
+        maxStepReached: Math.max(loaded.maxStepReached, loaded.step),
+      };
     }
     case "CLEAR_SOURCE":
       return {
@@ -177,6 +180,13 @@ export function reducer(state: StudioState, action: Action): StudioState {
         ...state,
         currentProjectId: action.id,
         currentProjectName: action.name,
+      };
+    case "SET_AUTO_PHASE":
+      return {
+        ...state,
+        autoPhase: action.phase,
+        autoDetail: action.detail ?? state.autoDetail,
+        autoError: action.error !== undefined ? action.error : state.autoError,
       };
     default:
       return state;

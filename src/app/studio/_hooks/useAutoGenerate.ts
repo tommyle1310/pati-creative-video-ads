@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useStudio } from "../_state/context";
 import type { VideoAnalysis, StoryboardScene, ScriptScene } from "@/lib/studio/types";
 import { pollJob, pollKieJob, pcmToWav, resizeImageForApi } from "../_utils/helpers";
@@ -279,26 +279,92 @@ const VOICE_BY_GENDER: Record<string, { voice: string; name: string }> = {
 
 // ── Clothing variation per scene ─────────────────────────────
 
-const OUTFIT_POOL = [
-  "casual white t-shirt and jeans",
-  "fitted black tank top and joggers",
-  "light blue button-up shirt, sleeves rolled up",
-  "cozy cream sweater and dark pants",
-  "athletic wear, compression top",
-  "olive green hoodie, relaxed fit",
-  "grey henley shirt and khakis",
-  "navy polo and chinos",
-  "denim jacket over plain tee",
-  "linen shirt, relaxed summer look",
-  "striped casual shirt and shorts",
-  "workout tank and leggings",
-  "soft pink blouse and dark jeans",
-  "oversized knit sweater, cozy vibes",
-  "sporty zip-up jacket, athleisure",
+// Removed — outfits are now embedded in BROLL_SCENES to match context
+
+// ── B/C-roll activity pool ─────────────────────────────────
+// Each entry: { img: static description, video: specific motion for Kling }
+// Video motion must be VERY specific so Kling doesn't guess silly actions.
+
+const BROLL_SCENES = [
+  {
+    outfit: "casual white t-shirt and dark jeans, barefoot",
+    img: "standing at a kitchen counter, one hand resting on the counter, looking down at a cutting board with vegetables",
+    video: "The person slowly picks up a knife and begins slicing a cucumber on the cutting board. Small deliberate cuts. Other hand holds the cucumber steady. Head stays looking down at hands. No expression change.",
+  },
+  {
+    outfit: "comfortable grey sweatshirt and joggers, hair tied back",
+    img: "sitting at a desk with a laptop open, one hand on the trackpad, looking at the screen",
+    video: "The person scrolls slowly on the laptop trackpad with their right index finger. Left hand rests on the desk. Eyes fixed on screen. Slight nod as if reading something interesting. No smile, neutral focus.",
+  },
+  {
+    outfit: "athletic tank top, leggings, running shoes, hair in ponytail",
+    img: "standing in a gym near equipment, holding a water bottle at waist level, looking off to the side",
+    video: "The person slowly lifts the water bottle to their lips and takes a small sip. Lowers the bottle back down. Eyes stay looking to the side. Breathing is calm. No expression change.",
+  },
+  {
+    outfit: "light jacket, casual pants, clean sneakers",
+    img: "walking on a sidewalk, mid-stride, looking slightly downward ahead",
+    video: "The person continues walking forward at a steady pace. Arms swing naturally at their sides. Eyes look ahead and slightly down at the path. Hair moves slightly with the stride. Natural walking rhythm.",
+  },
+  {
+    outfit: "oversized knit sweater and soft lounge pants, cozy socks",
+    img: "sitting on a couch, leaning back slightly, holding a phone in one hand looking at it",
+    video: "The person's thumb slowly scrolls up on the phone screen. Eyes are fixed on the phone. After a moment, they tilt the phone slightly. Body stays relaxed and still. No smile, just casual scrolling.",
+  },
+  {
+    outfit: "soft cotton robe over pyjama top, hair slightly messy",
+    img: "standing in a kitchen, both hands around a coffee mug, looking out a window, early morning light",
+    video: "The person slowly raises the coffee mug to their lips, takes a small sip, then lowers it back. Eyes stay fixed on the window. Steam rises from the mug. Body is still, calm morning moment.",
+  },
+  {
+    outfit: "fitted sports bra and yoga leggings, barefoot",
+    img: "on a yoga mat in a living room, in a standing position with hands at sides, looking at the floor",
+    video: "The person slowly bends forward into a forward fold, hands reaching toward the floor. Movement is slow and controlled. Head drops down following the spine. Smooth continuous motion.",
+  },
+  {
+    outfit: "casual striped shirt and chinos, comfortable flats",
+    img: "at a grocery store, pushing a cart, looking at products on a shelf",
+    video: "The person reaches out with one hand and picks up a product from the shelf. They look at it briefly, then place it in the cart. Eyes stay on the shelf and product. Natural shopping movement.",
+  },
+  {
+    outfit: "athletic shorts, compression top, running shoes",
+    img: "sitting on a bench outdoors in a park, tying a running shoe, head looking down at the shoe",
+    video: "The person pulls the shoelace tight with both hands, makes a loop, and ties a bow. Fingers work methodically. Head stays down looking at the shoe. Then they pat the shoe and begin to stand up.",
+  },
+  {
+    outfit: "soft cotton pyjamas, bare feet, relaxed morning look",
+    img: "in a bedroom, making the bed, hands smoothing out the sheet, looking down",
+    video: "The person smooths the bedsheet with both palms, moving from center outward. Then they pick up a pillow and place it at the headboard. Eyes stay on the bed. Slow domestic movement.",
+  },
+  {
+    outfit: "button-up shirt with sleeves rolled up, dark trousers",
+    img: "at a desk in a home office, writing in a notebook with a pen, leaning slightly forward",
+    video: "The person writes slowly in the notebook. Pen moves across the page in small strokes. Other hand holds the notebook edge. Eyes follow the pen tip. Head tilts slightly as they write.",
+  },
+  {
+    outfit: "plain t-shirt, comfortable at-home shorts",
+    img: "standing in front of a bathroom mirror, hands at the sink, looking at own reflection",
+    video: "The person turns on the faucet, cups water in their hands, and splashes it on their face. Then they reach for a towel and pat their face dry. Eyes look at their reflection between actions.",
+  },
+  {
+    outfit: "lightweight hoodie, comfortable joggers, sneakers",
+    img: "in a park, sitting on grass, legs crossed, hands resting on knees, looking at trees",
+    video: "The person shifts weight slightly, looks around at the trees. Hands stay on knees. Head turns slowly from left to right taking in the scenery. A calm reflective moment. Minimal movement.",
+  },
+  {
+    outfit: "fitted workout tee, gym shorts, cross-training shoes",
+    img: "in a home gym, standing next to a rack of dumbbells, one hand reaching for a weight",
+    video: "The person grips a dumbbell and lifts it off the rack with one hand. They bring it to shoulder height in a slow curl. Then lower it back down. Eyes stay on the weight. Controlled motion.",
+  },
+  {
+    outfit: "linen shirt, relaxed-fit chinos, bare feet on tile floor",
+    img: "leaning against a kitchen counter, arms crossed, looking at something off-screen to the left",
+    video: "The person uncrosses their arms slowly, reaches for a glass of water on the counter, takes a sip, then sets it down. Eyes stay looking to the left. Relaxed posture throughout. No smile.",
+  },
 ];
 
-function getOutfitForScene(sceneIndex: number): string {
-  return OUTFIT_POOL[sceneIndex % OUTFIT_POOL.length];
+function getBrollScene(sceneIndex: number): { outfit: string; img: string; video: string } {
+  return BROLL_SCENES[sceneIndex % BROLL_SCENES.length];
 }
 
 // ── Concurrency helper ───────────────────────────────────────
@@ -324,10 +390,24 @@ async function runConcurrent<T>(
 
 export function useAutoGenerate() {
   const { s, dispatch } = useStudio();
-  const [phase, setPhase] = useState<AutoPhase>("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [detail, setDetail] = useState("");
+  // Phase/detail/error are in global state so they persist across sidebar navigation
+  const phase = (s.autoPhase || "idle") as AutoPhase;
+  const error = s.autoError || null;
+  const detail = s.autoDetail || "";
   const abortRef = useRef(false);
+
+  // Use a ref to track current phase for setDetail (avoids stale closure)
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+
+  const setPhase = (p: AutoPhase) => {
+    phaseRef.current = p;
+    dispatch({ type: "SET_AUTO_PHASE", phase: p, error: null });
+  };
+  const setError = (e: string | null) =>
+    dispatch({ type: "SET_AUTO_PHASE", phase: "error", error: e });
+  const setDetail = (d: string) =>
+    dispatch({ type: "SET_AUTO_PHASE", phase: phaseRef.current, detail: d });
 
   const isRunning =
     phase !== "idle" && phase !== "complete" && phase !== "error";
@@ -598,6 +678,9 @@ export function useAutoGenerate() {
       const sceneIndexMap = new Map<string, number>();
       storyboardScenes.forEach((sc, i) => sceneIndexMap.set(sc.id, i));
 
+      // Track product-showing scenes (max 2 in entire video)
+      let productSceneCount = 0;
+
       await runConcurrent(
         storyboardScenes,
         async (scene: StoryboardScene) => {
@@ -616,21 +699,76 @@ export function useAutoGenerate() {
             const rollType = scene.rollType || "broll";
             const sceneIdx = sceneIndexMap.get(scene.id) || 0;
 
-            // Vary clothing per scene — prevents all scenes having same outfit
-            const outfit = getOutfitForScene(sceneIdx);
-            prompt += `\n\nCharacter is wearing: ${outfit}.`;
+            // ── GENDER ENFORCEMENT (ALL scenes same gender as primary character) ──
+            const genderWord = detectedGender === "female" ? "woman" : detectedGender === "male" ? "man" : "person";
+            const genderAdj = detectedGender === "female" ? "female" : detectedGender === "male" ? "male" : "";
+            // Replace wrong-gender words
+            if (detectedGender === "female") {
+              prompt = prompt.replace(/\b(man|male|guy|him|his|he\b|boy|gentleman|husband|father)\b/gi, genderWord);
+            } else if (detectedGender === "male") {
+              prompt = prompt.replace(/\b(woman|female|girl|her|she\b|lady|wife|mother)\b/gi, genderWord);
+            }
+
+            // Get scene context FIRST, then build prompt around it
+            const brollScene = getBrollScene(sceneIdx);
+            const CAMERA_ANGLES = [
+              "slightly from the left", "slightly from the right",
+              "from a low angle looking up", "straight on at eye level",
+              "from slightly above", "over the shoulder from behind",
+              "from the side profile", "three-quarter view from the left",
+            ];
+            const cameraAngle = CAMERA_ANGLES[sceneIdx % CAMERA_ANGLES.length];
+
+            // Max 2 product-holding scenes in entire video
+            const isProductScene = productSceneCount < 2 && rollType !== "aroll" && (sceneIdx % 5 < 2);
+
+            // ── GLOBAL REALISM RULES (all rolls) ──
+            const realismRules = `\nPHOTO REALISM: Visible skin texture, pores, and imperfections (freckles, small blemishes, uneven skin tone). Natural body proportions. Ambient lighting that matches the environment — NO studio rim light, NO dramatic backlighting unless outdoors. Shallow depth of field but background still recognizable (NOT blurred to oblivion). The ${genderWord} has natural skin — NOT airbrushed, NOT porcelain smooth.`;
 
             if (rollType === "aroll") {
-              if (!prompt.toLowerCase().startsWith("hyperrealistic"))
-                prompt = `Hyperrealistic photography. ${prompt}`;
+              // A-ROLL: direct to camera, selfie-style
+              const arollOutfits = [
+                "casual plain t-shirt", "comfortable hoodie",
+                "simple crew-neck sweater", "relaxed button-up shirt",
+                "fitted long-sleeve top", "soft henley shirt",
+              ];
+              const arollOutfit = arollOutfits[sceneIdx % arollOutfits.length];
+              prompt = `The person in this image MUST be the EXACT same person shown in the first reference image. Same face, same facial features, same skin tone, same hair color and style, same gender (${genderAdj}). This is the SAME character across all scenes.\n\nA ${genderAdj} ${genderWord} looking DIRECTLY into the camera lens with confident eye contact. ${prompt}`;
+              prompt += `\nWearing: ${arollOutfit}.`;
+              prompt += `\nCamera angle: straight on, selfie distance (arm's length). Frontal face fully visible. Close-up head and shoulders.`;
+              prompt += `\nThis is a direct-to-camera talking head — like an iPhone selfie video. Natural indoor or outdoor lighting. Shot on iPhone 15 Pro, portrait mode, f/1.8. Slight grain, unfiltered, no color grade.`;
+              prompt += realismRules;
             } else {
-              // B-roll / C-roll: natural, candid, NO eye contact, NO talking
-              prompt += "\nIMPORTANT: The person is NOT looking at the camera. Eyes look away, down, or at the product. Candid, natural moment — NOT posed. Mouth is closed, relaxed neutral expression. No exaggerated emotions, no wide eyes, no surprise face. Natural and authentic lifestyle photography.";
+              // B/C-ROLL: outfit MUST match the scene context
+              const outfit = brollScene.outfit;
+
+              // Character consistency: match the reference image person
+              const charMatch = `The person MUST be the EXACT same ${genderAdj} ${genderWord} shown in the first reference image. Same face, same facial features, same skin tone, same hair color and style. Do NOT change the person's gender or appearance.\n\n`;
+
+              if (!isProductScene) {
+                prompt = `${charMatch}A ${genderAdj} ${genderWord} ${brollScene.img}. ${prompt}`;
+                prompt = prompt
+                  .replace(/holding.*?(product|package|pouch|bag|gummies|bottle|supplement)/gi, "")
+                  .replace(/with.*?(product|package|pouch|bag|gummies|bottle|supplement)/gi, "");
+                prompt += `\nNO product visible anywhere in this scene. Hands are occupied with the activity.`;
+              } else {
+                productSceneCount++;
+                prompt = `${charMatch}A ${genderAdj} ${genderWord} ${brollScene.img}. ${prompt}`;
+                prompt += `\nThe second reference image is the product. Product packaging must EXACTLY match that reference. Same colors, same logo, same design. Product rests naturally in the scene — NOT held up to camera, NOT spotlit. Product has the SAME lighting as the environment.`;
+              }
+
+              prompt += `\nWearing: ${outfit}.`;
+              prompt += `\nCamera angle: ${cameraAngle}. Medium to wide shot (waist-up or full body). Camera is 4-6 feet away.`;
+              prompt += `\nBEHAVIOR: The ${genderWord} is MID-ACTION, captured candidly. NOT posing. NOT looking at camera. NOT smiling at camera. Eyes focused on the activity. Mouth closed, neutral relaxed expression. No exaggerated emotions.`;
+              prompt += `\nSTYLE: Candid lifestyle photography, NOT a photoshoot. Natural environment lighting. No studio setup. Slight motion blur acceptable.`;
+              prompt += realismRules;
             }
-            if (scene.imageFocusObject)
-              prompt = `Focus on: ${scene.imageFocusObject}. ${prompt}`;
-            if (scene.imageCameraAngle)
-              prompt = `${scene.imageCameraAngle} shot. ${prompt}`;
+
+            // A-roll: ONLY creator ref (no product mixing — prevents model confusion)
+            // B/C-roll with product: creator first (character), product second
+            // B/C-roll without product: only creator
+            const sceneCharUrl = creatorUrl;
+            const sceneProductUrl = (rollType !== "aroll" && isProductScene) ? productUrl : null;
 
             // Try KIE (nano-banana-pro) first, fallback to Vidtory on failure
             let imageUrl: string;
@@ -641,8 +779,8 @@ export function useAutoGenerate() {
                 body: JSON.stringify({
                   prompt,
                   aspectRatio,
-                  characterUrl: creatorUrl,
-                  productUrl,
+                  characterUrl: sceneCharUrl,
+                  productUrl: sceneProductUrl,
                 }),
               });
               if (!kieRes.ok) throw new Error((await kieRes.json()).error);
@@ -656,8 +794,8 @@ export function useAutoGenerate() {
                 body: JSON.stringify({
                   prompt,
                   aspectRatio,
-                  characterUrl: creatorUrl,
-                  productUrl,
+                  characterUrl: sceneCharUrl,
+                  productUrl: sceneProductUrl,
                 }),
               });
               if (!vidRes.ok) throw new Error((await vidRes.json()).error);
@@ -810,29 +948,47 @@ export function useAutoGenerate() {
                 ? JSON.stringify(scene.videoPrompt)
                 : scene.videoPrompt;
             const rollType = scene.rollType || "broll";
+            const vidSceneIdx = sceneIndexMap.get(scene.id) || 0;
             const allowLipsync =
               rollType === "aroll" && scene.includeDialogueInPrompt;
 
-            let prompt = `Motion/Action: ${vpStr}`;
-            if (allowLipsync) {
-              prompt = `The creator is speaking.\n${prompt}`;
-              prompt += `\nDialogue in English: "${scene.voiceoverScript}"`;
-            }
-            if (rollType !== "aroll") {
-              // B/C-roll: absolutely NO talking, NO eye contact, natural candid
-              prompt +=
-                "\n\nCRITICAL: The subject does NOT speak. Mouth stays CLOSED at all times. No lip movement whatsoever. No lip sync. No dialogue. The subject does NOT look at the camera — eyes look away, down, or at an object. Relaxed neutral expression, no exaggerated emotions, no wide eyes. Candid natural movement only.";
-            }
-            prompt +=
-              "\n\nAUDIO CONSTRAINT: Absolutely NO background music. NO ambient sounds. NO sound effects. Complete silence. No Music Background.";
+            // Gender enforcement in video prompt
+            const genderWord = detectedGender === "female" ? "woman" : detectedGender === "male" ? "man" : "person";
+
+            let prompt: string;
+
             if (rollType === "aroll") {
-              if (!prompt.includes("Shot on"))
-                prompt +=
-                  "\nShot on iPhone 15 Pro, portrait mode, f/1.8. 1600 ISO grain. No color grade. Unfiltered.";
+              // A-ROLL VIDEO: speaking to camera, constant eye contact
+              prompt = `A ${genderWord} is speaking directly to the camera in a selfie-style video.`;
+              prompt += `\n\nEXACT MOTION SEQUENCE:`;
+              prompt += `\n1. The ${genderWord}'s eyes are locked on the camera lens the ENTIRE time. No looking away.`;
+              prompt += `\n2. Mouth opens and closes naturally as if speaking. Subtle jaw and lip movement.`;
+              prompt += `\n3. Small natural head micro-movements — tiny nods, slight tilts. Head stays mostly centered.`;
+              prompt += `\n4. One hand may gesture slightly below chin level. The other hand holds the phone/camera steady.`;
+              prompt += `\n5. Expression is engaged and natural — like talking to a friend on FaceTime. NOT a news anchor. NOT overly enthusiastic.`;
+              if (allowLipsync) {
+                prompt += `\nDialogue: "${scene.voiceoverScript}"`;
+              }
+              prompt += `\n\nOriginal scene direction: ${vpStr}`;
+              prompt += `\nShot on iPhone 15 Pro, selfie camera, portrait mode. Natural indoor/outdoor light. Slight grain, no color grade.`;
+              prompt += `\nAUDIO: Complete silence. No music. No sound effects.`;
             } else {
-              if (!prompt.includes("Shot on"))
-                prompt +=
-                  "\nPhotorealistic, shot on Sony A7IV, 85mm lens, natural color grading. Lifestyle cinematography.";
+              // B/C-ROLL VIDEO: highly specific motion so Kling doesn't guess
+              const brollScene = getBrollScene(vidSceneIdx);
+
+              prompt = `A ${genderWord} in a real environment. Camera is 4-6 feet away, medium-wide framing.`;
+              prompt += `\n\nEXACT MOTION SEQUENCE (5 seconds):`;
+              prompt += `\n${brollScene.video}`;
+              prompt += `\n\nSTRICT RULES:`;
+              prompt += `\n- The ${genderWord} NEVER looks at the camera. Eyes stay on the activity at all times.`;
+              prompt += `\n- Mouth stays CLOSED the entire clip. No talking, no smile, no lip movement, no sighing.`;
+              prompt += `\n- NO deep breaths. NO shoulder raising. NO chest heaving. NO sighing motion.`;
+              prompt += `\n- NO lifting hands up for no reason. Every hand movement has a PURPOSE related to the activity.`;
+              prompt += `\n- Movement is SLOW and NATURAL. Real human speed, not sped up or exaggerated.`;
+              prompt += `\n- Face expression: neutral, focused on the task. NOT happy, NOT sad. Just doing their thing.`;
+              prompt += `\n\nOriginal scene direction: ${vpStr}`;
+              prompt += `\nPhotorealistic, shot on Sony A7IV, 85mm f/1.4. Natural ambient lighting. No studio lights. Slight color grade.`;
+              prompt += `\nAUDIO: Complete silence. No music. No sound effects.`;
             }
 
             // Try KIE (kling-3.0) first, fallback to Vidtory on failure
@@ -939,10 +1095,16 @@ export function useAutoGenerate() {
 
   const cancelAutoGenerate = useCallback(() => {
     abortRef.current = true;
-    setPhase("idle");
-    setDetail("");
+    dispatch({ type: "SET_AUTO_PHASE", phase: "idle", detail: "", error: null });
     dispatch({ type: "SET_ANALYZING", v: false });
   }, [dispatch]);
+
+  // Abort polling loops on unmount (prevents leaked API calls)
+  useEffect(() => {
+    return () => {
+      abortRef.current = true;
+    };
+  }, []);
 
   return {
     phase,
